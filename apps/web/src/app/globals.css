@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   DESIGN TOKENS
+   The whole visual identity lives here. Change these values to restyle the
+   app; components below reference tokens only, never raw colors or sizes.
+   --------------------------------------------------------------------------- */
+:root {
+  /* Palette — newsprint */
+  --paper: #f7f5f0;
+  --ink: #16150f;
+  --ink-muted: #6b675c;
+  --rule: #d8d3c7;
+  --accent: #8a2b14;
+
+  /* Type scale */
+  --text-masthead: 2.75rem;
+  --text-section: 0.72rem;
+  --text-headline: 1.05rem;
+  --text-body: 0.9rem;
+  --text-meta: 0.72rem;
+
+  /* Rhythm */
+  --gutter: 2.25rem;
+  --stack: 1.1rem;
+  --measure: 34rem;
+  --rule-weight: 1px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #12110e;
+    --ink: #eae6dc;
+    --ink-muted: #8e887a;
+    --rule: #2e2b25;
+    --accent: #d4703f;
+  }
+}
+
+/* Expose tokens to Tailwind utilities (bg-paper, text-ink, border-rule, …) */
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--ink-muted);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+
+  --font-display: var(--font-serif-display), Georgia, serif;
+  --font-sans: var(--font-sans-ui), system-ui, sans-serif;
+  --font-mono: var(--font-mono-ui), ui-monospace, monospace;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans-ui), system-ui, sans-serif;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------------------
+   EDITORIAL PRIMITIVES
+   Semantic classes so markup stays readable and restyling stays centralized.
+   --------------------------------------------------------------------------- */
+@layer components {
+  .masthead {
+    font-family: var(--font-serif-display), Georgia, serif;
+    font-size: var(--text-masthead);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  /* Small-caps section label sitting on a hairline rule. */
+  .section-label {
+    font-size: var(--text-section);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    border-bottom: var(--rule-weight) solid var(--ink);
+    padding-bottom: 0.4rem;
+    margin-bottom: var(--stack);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .entry {
+    padding: 0.6rem 0;
+    border-bottom: var(--rule-weight) solid var(--rule);
+  }
+  .entry:last-child {
+    border-bottom: none;
+  }
+
+  .entry-title {
+    font-family: var(--font-serif-display), Georgia, serif;
+    font-size: var(--text-headline);
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+
+  .entry-meta {
+    font-size: var(--text-meta);
+    color: var(--ink-muted);
+    letter-spacing: 0.04em;
+  }
+
+  /* Figures align in a column and never reflow the label beside them. */
+  .figure {
+    font-family: var(--font-mono-ui), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-body);
+  }
+
+  a.entry-link {
+    text-decoration: none;
+    color: inherit;
+    box-shadow: inset 0 -1px 0 var(--rule);
+    transition: box-shadow 0.15s ease, color 0.15s ease;
+  }
+  a.entry-link:hover {
+    color: var(--accent);
+    box-shadow: inset 0 -1px 0 var(--accent);
+  }
+}

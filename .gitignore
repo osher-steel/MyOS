@@ -1,0 +1,7 @@
+__pycache__/
+.env
+.next/
+.plaid_sandbox.json
+.spotify_tokens.json
+*.pyc
+node_modules/
