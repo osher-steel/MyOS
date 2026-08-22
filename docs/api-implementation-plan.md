@@ -1,0 +1,226 @@
+# Personal OS — API Implementation Plan
+
+Companion to [`excalidraw/personal-os-api-architecture.excalidraw`](excalidraw/personal-os-api-architecture.excalidraw).
+
+Conventions follow `~/desktop/monorepo/packages/api` — `core/` primitives, `domains/`
+verticals with co-located `triggers/`, `integrations/` for third-party clients — adapted
+for a single-user app with no authorization model.
+
+---
+
+## 1. What changes from the monorepo pattern
+
+The monorepo's resource builder carries a permission system: `Permission` levels,
+`authorizeGet/List/Patch/Delete`, `ownership` flags, and a `client: UserEntity`
+threaded through every hook. **All of it comes out.** There is one user, so there is
+nothing to authorize against.
+
+What survives, because it earns its place even with one user:
+
+| Kept | Why it still matters |
+| --- | --- |
+| `FirestoreRepo` | get / list / create / patch / delete + query building in one place |
+| `defineResource` | one description per resource → routes, validation, errors |
+| `AppError` + `processError` | every failure returns the same body shape |
+| Zod `schemas: { query, create, patch, record }` | the contract, not hand-rolled checks |
+| `buildCreateRecord` / `buildPatchRecord` | derived fields computed in one known place |
+| `actions` | non-CRUD verbs (`/syncs`, `/close`, `/allocations`) without bespoke routes |
+| co-located `triggers/` | denormalization stays next to the domain that owns it |
+
+Access control collapses to a single static bearer token (`MYOS_API_TOKEN`) checked
+once in the builder. It is a lock on the door, not an identity — no user id, no roles,
+no ownership filters, no per-record scoping.
+
+---
+
+## 2. Folder layout
+
+```text
+apps/web/src/
+├── server/                     ← all of it server-only, never imported by a client component
+│   ├── core/
+│   │   ├── errors/
+│   │   │   ├── errors.ts               AppError, ServiceValidationError, ServiceNotFoundError,
+│   │   │   │                           ServiceConflictError, ServiceUpstreamError
+│   │   │   └── errorResponses.ts       processError() → NextResponse
+│   │   ├── firestore/
+│   │   │   ├── client.ts               admin SDK init from service account
+│   │   │   ├── firestoreRepo.ts        get/list/create/patch/delete
+│   │   │   ├── firestoreQuery.ts       filter fields → Firestore query
+│   │   │   └── firestoreSanitize.ts    strip undefined, Timestamp → ISO on read
+│   │   ├── resource/
+│   │   │   ├── defineResource.ts       builder → { GET, POST, PATCH, DELETE }
+│   │   │   ├── resource.types.ts       DomainInner, ActionDefinition, EndpointFlags
+│   │   │   └── requireToken.ts         single bearer check
+│   │   └── triggers/
+│   │       ├── registry.ts             resource → post-write hooks
+│   │       └── runTriggers.ts          dispatch after a successful mutation
+│   ├── domains/
+│   │   ├── artists/            artists.domain.ts .schemas.ts .types.ts .query.ts
+│   │   ├── artistSnapshots/    + triggers/artistSnapshots.denormalization.ts
+│   │   ├── transactions/
+│   │   ├── budgets/
+│   │   ├── budgetSnapshots/
+│   │   ├── goals/              + triggers/goals.amountSaved.ts
+│   │   ├── goalAllocations/
+│   │   └── prompts/
+│   ├── integrations/           spotify.ts · lastfm.ts · plaid.ts   (today's src/lib/*)
+│   └── services/               musicSync · plaidSync · snapshotEngine
+│                               · surplusAllocator · driftCheck
+└── app/api/                    thin route files, no logic
+    ├── music/artists/route.ts          export const { GET, POST } = artistResource
+    ├── music/artists/[id]/route.ts
+    ├── music/syncs/route.ts
+    ├── music/snapshots/route.ts
+    ├── transactions/route.ts
+    ├── transactions/[id]/route.ts
+    ├── transactions/syncs/route.ts
+    ├── budgets/route.ts
+    ├── budgets/[id]/route.ts
+    ├── budgets/[monthYear]/snapshot/route.ts
+    ├── goals/route.ts
+    ├── goals/[id]/route.ts
+    ├── goals/allocations/route.ts
+    ├── goals/drift/route.ts
+    ├── accounts/balance/route.ts       live Plaid passthrough, nothing stored
+    └── prompts/route.ts
+```
+
+Route files stay one line each. Everything testable lives under `server/`.
+
+---
+
+## 3. The resource builder
+
+```ts
+export const artistResource = defineResource({
+  inner: artistDomain,
+  endpoints: {
+    get:    {},
+    list:   {},
+    create: {},
+    patch:  {},
+  },
+  actions: {
+    sync: {
+      method: "post",
+      path: "/syncs",
+      inputSchema: syncInputSchema,
+      run: async ({ input }) => ({ status: 202, body: { data: await runMusicSync(input) } }),
+    },
+  },
+});
+```
+
+Each request runs the same pipeline:
+
+```
+requireToken → parse params → validate (zod) → [fetch existing for :id]
+  → rules() → buildRecord() → repo write → runTriggers() → envelope
+                                                    ↓ throw
+                                              processError()
+```
+
+**Response envelope** — identical everywhere, matching the monorepo's error body exactly:
+
+```jsonc
+// success
+{ "data": { … } }                       // get / create / patch / action
+{ "data": [ … ], "nextCursor": "…" }    // list
+
+// failure
+{ "error": "Budget line category is unknown.", "code": "validation_error",
+  "details": { … } }
+```
+
+Status and `code` come from the thrown `AppError` subclass, so a handler never
+writes a status by hand. Anything uncaught becomes `500 internal_error` with the
+detail logged, never returned.
+
+---
+
+## 4. Triggers
+
+**Start with post-write hooks, not Cloud Functions.** Every write goes through this
+API — there is one writer and one user — so a hook that runs inline after a
+successful mutation is sufficient, synchronous, and debuggable in the same process.
+
+Hooks take the Firestore trigger signature deliberately:
+
+```ts
+type PostWrite<T> = (ctx: { before: T | null; after: T | null; id: string }) => Promise<void>;
+```
+
+so promoting one to a real `onDocumentWritten` later is a move, not a rewrite. That
+day comes only when something outside this API starts writing — a scheduler, a
+webhook, a second client.
+
+Two are needed at the start:
+
+| Trigger | Fires on | Does |
+| --- | --- | --- |
+| `goals.amountSaved` | write to `goalAllocations` | recompute `amountSaved` on the parent goal from the ledger |
+| `budgetSnapshots.recompute` | write to `transactions` where `status = working` for that month | mark the open month's snapshot stale so the next read recomputes |
+
+Everything else denormalizes fine inside `buildCreateRecord` / `buildPatchRecord`.
+
+---
+
+## 5. Build order
+
+Each phase ends somewhere the app still runs.
+
+**Phase 1 — core + one vertical slice**
+`errors/`, `firestore/`, `resource/`, `requireToken`, then `artists` end to end.
+Proves the builder against a real collection before six more depend on it.
+*Done when:* `GET /api/music/artists` returns from Firestore with the standard envelope,
+and a bad query returns `400 validation_error`.
+
+**Phase 2 — music complete**
+`artistSnapshots` domain, `integrations/lastfm.ts`, `services/musicSync.ts`
+(paginate 3 windows → diff → write one snapshot → enrich unseen artists).
+Move today's `src/lib/spotify.ts` to `server/integrations/`.
+*Done when:* the Music tab's sync button writes a snapshot and genres appear.
+
+**Phase 3 — transactions**
+`transactions` + `syncState`, `integrations/plaid.ts`, `services/plaidSync.ts`
+handling `added` / `modified` / `removed` and the stored cursor.
+`PATCH /transactions/:id` sets `category` manually and must survive the next sync.
+Plus `accounts/balance` as a live passthrough — no collection, no cache.
+*Done when:* a re-sync leaves manual categories untouched (write the test first).
+
+**Phase 4 — budgets**
+`budgets` with `lines[]` and the one-active invariant, `budgetSnapshots`,
+`services/snapshotEngine.ts` producing per-category planned/spent/delta/pctUsed.
+*Done when:* the open month recomputes on read and freezes on close.
+
+**Phase 5 — goals**
+`financialGoals` (with `targetAmount`), `goalAllocations` ledger,
+`services/surplusAllocator.ts` filling buckets by priority and drawing down on
+deficit, `services/driftCheck.ts` comparing the ledger to live Plaid.
+*Done when:* closing a month moves the surplus and `GET /goals/drift` reports zero.
+
+**Phase 6 — prompts + agent**
+`prompts` (base + modules), `POST /agent/query` composing base + module + live
+context read through the same REST resources the UI uses.
+
+---
+
+## 6. Decisions to make before Phase 1
+
+1. **Firestore credentials.** Admin SDK needs a service account JSON. It must be
+   pathed from `.env` and gitignored — the repo is public.
+2. **Timestamps.** Store Firestore `Timestamp`, serialize to ISO strings on read
+   (`firestoreSanitize`), so the API contract is plain JSON.
+3. **Money.** Store integer cents, not floats. Plaid returns floats; convert at the
+   integration boundary, once.
+4. **Category enum.** Lives in `budgets` as an editable array, so it cannot be a
+   TypeScript enum. Validate transaction `category` against the active budget's
+   categories at write time.
+
+### Open question
+
+When a month closes at a **deficit**, does the allocator draw from the
+lowest-priority bucket first until it is empty, or proportionally across all
+buckets? This is the only branch in the design not determined by what is already
+decided, and it changes `surplusAllocator` in Phase 5.
