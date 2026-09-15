@@ -1,4 +1,4 @@
-import type { FireTimestampLike } from "./common.js";
+import type { FireTimestampLike, ISODateString, MonthYear } from "./common.js";
 
 // ── Budgets ──────────────────────────────────────────────
 
@@ -12,11 +12,6 @@ export enum BudgetGroup {
 /** Category name → amount allocated for the month. */
 export type BudgetAllocations = Record<string, number>;
 
-/**
- * One month's plan. Stamped per month so last month's allocations survive
- * when this month's change. Document id is `${userId}_${YYYY-MM}` — see
- * `budgetId()` — so the current budget is a direct get, not a query.
- */
 export interface Budget {
   id: string;
   createdAt: FireTimestampLike;
@@ -28,32 +23,41 @@ export interface Budget {
   savings: BudgetAllocations;
 }
 
-// ── Line entries (transactions) ──────────────────────────
-
-/** Plaid's view of the transaction, from /transactions/sync. */
 export enum PlaidTransactionStatus {
   PENDING = "pending",
   POSTED = "posted",
   REMOVED = "removed",
 }
 
-/** Our view: has it been filed under a budget category, and is that category still real. */
 export enum LineEntryStatus {
   LABELLED = "labelled",
   NOT_LABELLED = "not_labelled",
-  /** The label names a category that no longer exists in the month's budget. */
   MISLABELED = "mislabeled",
 }
 
-/**
- * A single transaction. Document id is Plaid's `transaction_id`, so re-syncing
- * the same transaction is an idempotent write, not a duplicate.
- */
 export interface LineEntry {
-  id: string;
-  amount: number;
-  /** A category name from the month's budget (any group). */
+  id: string; // Plaid transaction_id, so re-sync is idempotent
+  name: string;
+  amount: number; // Plaid sign: positive is money out
+  date: ISODateString; // YYYY-MM-DD
+  monthYear: MonthYear;
+  currency: string;
   label?: string;
+  pendingTransactionId?: string;
   plaidStatus: PlaidTransactionStatus;
   osStatus: LineEntryStatus;
+  createdAt: FireTimestampLike;
+  updatedAt: FireTimestampLike;
+}
+
+export type LineEntryView = Omit<LineEntry, "createdAt" | "updatedAt">;
+
+export interface PlaidTransaction {
+  id: string;
+  name: string;
+  amount: number;
+  date: ISODateString;
+  currency: string;
+  pending: boolean;
+  pendingTransactionId?: string;
 }
