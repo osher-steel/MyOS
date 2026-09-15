@@ -1,0 +1,19 @@
+{
+  "name": "myos-monorepo",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "clean": "turbo clean",
+    "api": "pnpm --filter api",
+    "web": "pnpm --filter web",
+    "shared": "pnpm --filter @myos/shared"
+  },
+  "devDependencies": {
+    "turbo": "^2.9.16"
+  }
+}
