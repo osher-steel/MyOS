@@ -1,0 +1,37 @@
+{
+  "name": "api",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "dev": "node --env-file=../../.env --import tsx --watch src/server.ts",
+    "start": "node --env-file=../../.env --import tsx src/server.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "test": "node --import tsx --test $(find tests -name '*.test.ts' -print)",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "firebase-admin": "^13.9.0",
+    "firebase-functions": "^7.2.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@myos/shared": "workspace:*",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.19.0",
+    "eslint": "^9.39.0",
+    "eslint-plugin-import-x": "^4.17.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.62.1"
+  }
+}

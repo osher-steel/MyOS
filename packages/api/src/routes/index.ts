@@ -1,0 +1,42 @@
+import { Router } from "express";
+import { defineResource } from "../core/resourceBuilder/resourceBuilder.js";
+import { budgetDomain } from "../domains/budgets/budgets.domain.js";
+import { firestoreIndexDomain } from "../domains/firestoreIndexes/firestoreIndexes.domain.js";
+
+export const router = Router();
+
+// ── Firestore index requests ──────────────────────────────
+// Written by FirestoreRepo.list when Firestore rejects a query for a missing
+// composite index (the caller sees 500 missing_index). Read them here to find
+// the console URL that creates the index, then patch status once it's built.
+
+const firestoreIndex = defineResource({
+  inner: firestoreIndexDomain,
+  endpoints: {
+    get: { permission: "owner" },
+    list: { permission: "owner" },
+    patch: { permission: "owner" },
+    delete: { permission: "owner" },
+  },
+});
+
+// ── Budgets ───────────────────────────────────────────────
+// One document per user-month, id `${userId}_${YYYY-MM}`. Timestamps are
+// server-set; `id`, `createdAt` and `updatedAt` are filterable and sortable.
+
+const budget = defineResource({
+  inner: budgetDomain,
+  endpoints: {
+    get: { permission: "owner" },
+    list: { permission: "owner" },
+    create: { permission: "owner" },
+    patch: { permission: "owner" },
+    delete: { permission: "owner" },
+  },
+});
+
+// ── Mounts ────────────────────────────────────────────────
+// One line per resource. Add new domains above and mount them here.
+
+router.use("/budgets", budget.router);
+router.use("/firestore-index-requests", firestoreIndex.router);

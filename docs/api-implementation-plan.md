@@ -4,7 +4,17 @@ Companion to [`excalidraw/personal-os-api-architecture.excalidraw`](excalidraw/p
 
 Conventions follow `~/desktop/monorepo/packages/api` — `core/` primitives, `domains/`
 verticals with co-located `triggers/`, `integrations/` for third-party clients — adapted
-for a single-user app with no authorization model.
+for a single-user app.
+
+> **Status (2026-09-14).** The skeleton is in place as a pnpm workspace:
+> `packages/shared` (`@myos/shared`) and `packages/api` (Express, Firestore,
+> Firebase Function entry). `core/` — errors, `FirestoreRepo`, `defineListQuery`,
+> the query validators, missing-index capture, `defineResource` with auth — is
+> ported from the monorepo and covered by `packages/api/tests/core`. The first
+> domain is `firestoreIndexes`; budgets are next. Where this document said the
+> server would live inside `apps/web/src/server`, read `packages/api/src`
+> instead — the API is its own package, exactly like the monorepo, and the
+> web app calls it over HTTP with `RequestBuilder` from `@myos/shared`.
 
 ---
 
@@ -27,9 +37,11 @@ What survives, because it earns its place even with one user:
 | `actions` | non-CRUD verbs (`/syncs`, `/close`, `/allocations`) without bespoke routes |
 | co-located `triggers/` | denormalization stays next to the domain that owns it |
 
-Access control collapses to a single static bearer token (`MYOS_API_TOKEN`) checked
-once in the builder. It is a lock on the door, not an identity — no user id, no roles,
-no ownership filters, no per-record scoping.
+Access control collapses to three permission levels checked once in the builder:
+`none`, `auth` (any verified Firebase ID token or the `myos_` API key) and `owner`
+(the uid in `MYOS_OWNER_UID`, or the API key). No roles, no permission map, no
+per-record scoping — the ownership hooks survive in the builder for the day a
+second principal appears, but no domain needs them.
 
 ---
 
