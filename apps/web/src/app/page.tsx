@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { Entry, Section, load } from "@/components/editorial";
+import { Masthead } from "@/components/masthead";
 import { getAccounts, getTransactions } from "@/lib/plaid";
 import { getTopHeadlines } from "@/lib/news";
 import { getRecentTracks, getTopArtists } from "@/lib/spotify";
@@ -138,18 +139,9 @@ function Loading({ label }: { label: string }) {
 }
 
 export default function Home() {
-  const today = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-
   return (
     <main className="mx-auto max-w-6xl px-6 py-12 md:py-16">
-      <header className="border-b border-ink pb-4 mb-10">
-        <p className="entry-meta uppercase tracking-[0.18em]">{today}</p>
-        <h1 className="masthead mt-2">Personal OS</h1>
-      </header>
+      <Masthead title="Personal OS" current="home" />
 
       <div className="grid gap-x-[var(--gutter)] gap-y-12 md:grid-cols-2">
         <div className="flex flex-col gap-12">
@@ -171,7 +163,7 @@ export default function Home() {
       </div>
 
       <footer className="entry-meta mt-16 pt-4 border-t border-rule">
-        Plaid (sandbox) · NewsAPI · Spotify · Ticketmaster
+        Plaid · NewsAPI · Spotify · Ticketmaster
       </footer>
     </main>
   );
