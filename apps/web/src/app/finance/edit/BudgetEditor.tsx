@@ -5,10 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Section, SourceError } from "@/components/editorial";
+import { money } from "@/lib/format";
 import { DEFAULT_SAVINGS, remainderForSavings, totalAllocated, useFinanceEdit } from "./useFinanceEdit";
-
-const money = (amount: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amount);
 
 const SPENDING_GROUPS: Array<{ id: BudgetGroup; label: string }> = [
   { id: BudgetGroup.NEEDS, label: "Needs" },

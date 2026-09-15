@@ -2,6 +2,7 @@ import { budgetId, isMonthYear, type Budget } from "@myos/shared";
 import { NextResponse } from "next/server";
 import { ApiError, apiFetch } from "@/lib/api";
 import { env } from "@/lib/env";
+import { fromError, invalidMonth } from "@/lib/proxyResponses";
 
 /**
  * Browser-facing proxy for one month's budget. The API key and the owner id
@@ -10,21 +11,6 @@ import { env } from "@/lib/env";
  */
 
 type Params = RouteContext<"/api/budgets/[monthYear]">;
-
-function invalidMonth() {
-  return NextResponse.json({ error: "Month must be YYYY-MM.", code: "validation_error" }, { status: 400 });
-}
-
-function fromError(error: unknown) {
-  if (error instanceof ApiError) {
-    return NextResponse.json(
-      { error: error.message, code: error.code, details: error.details },
-      { status: error.status },
-    );
-  }
-  // fetch() rejects when the API is down; env() throws when .env is incomplete.
-  return NextResponse.json({ error: (error as Error).message, code: "upstream_unavailable" }, { status: 502 });
-}
 
 export async function GET(_req: Request, { params }: Params) {
   const { monthYear } = await params;

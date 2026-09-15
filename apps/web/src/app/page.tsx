@@ -1,33 +1,13 @@
 import { Suspense } from "react";
 import { Entry, Section, load } from "@/components/editorial";
 import { Masthead } from "@/components/masthead";
+import { clock, day, money } from "@/lib/format";
 import { getAccounts, getTransactions } from "@/lib/plaid";
 import { getTopHeadlines } from "@/lib/news";
 import { getRecentTracks, getTopArtists } from "@/lib/spotify";
 import { getEvents } from "@/lib/ticketmaster";
 
 export const dynamic = "force-dynamic";
-
-const money = (amount: number | null, currency: string) =>
-  amount === null
-    ? "—"
-    : new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency,
-        maximumFractionDigits: 0,
-      }).format(amount);
-
-// "2026-08-12" parses as UTC midnight and renders as the previous day west of
-// Greenwich, so date-only values are pinned to local time before formatting.
-const day = (value: string) => {
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? new Date(`${value}T00:00:00`)
-    : new Date(value);
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-};
-
-const clock = (iso: string) =>
-  new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 async function Money() {
   return load(
@@ -38,13 +18,13 @@ async function Money() {
         .reduce((sum, a) => sum + (a.current ?? 0), 0);
       return (
         <>
-          <Section label="Money" aside={`${money(total, "USD")} liquid`}>
+          <Section label="Money" aside={`${money(total)} liquid`}>
             {accounts.slice(0, 5).map((account) => (
               <Entry
                 key={`${account.name}-${account.mask}`}
                 title={account.name}
                 meta={`${account.type}${account.mask ? ` ···· ${account.mask}` : ""}`}
-                figure={money(account.current, account.currency)}
+                figure={money(account.current, { currency: account.currency })}
               />
             ))}
           </Section>
@@ -55,7 +35,7 @@ async function Money() {
                   key={`${tx.name}-${i}`}
                   title={tx.name}
                   meta={day(tx.date)}
-                  figure={money(tx.amount, tx.currency)}
+                  figure={money(tx.amount, { currency: tx.currency })}
                 />
               ))}
             </Section>

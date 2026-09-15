@@ -27,11 +27,13 @@ export function Entry({
   meta,
   figure,
   href,
+  children,
 }: {
   title: string;
   meta?: string;
   figure?: string;
   href?: string;
+  children?: ReactNode;
 }) {
   return (
     <div className="entry flex gap-4 items-baseline justify-between">
@@ -46,6 +48,7 @@ export function Entry({
           )}
         </div>
         {meta ? <div className="entry-meta mt-0.5">{meta}</div> : null}
+        {children ? <div className="mt-1">{children}</div> : null}
       </div>
       {figure ? <div className="figure shrink-0">{figure}</div> : null}
     </div>
