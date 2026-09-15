@@ -1,68 +1,51 @@
 # Personal OS
 
-A personal dashboard pulling money, news, music and events into one editorial view.
-Part 1 scope and design direction live in [`docs/product_overview.md`](docs/product_overview.md).
-
-## Layout
+pnpm workspace. Apps in `apps/*`, libraries and services in `packages/*`.
 
 ```text
-apps/web/          Next.js 16 · React 19 · TypeScript · Tailwind 4
-  src/lib/         one module per data source (plaid, news, spotify, ticketmaster)
-  src/components/  editorial primitives (Section, Entry)
-  src/app/         globals.css holds every design token
-spotify_pkce.py    one-time Spotify login (Authorization Code + PKCE, stdlib only)
+apps/web           Next.js dashboard (Today + Finance tabs)
+packages/shared    @myos/shared — types, enums, RequestBuilder shared by web + api
+packages/api       Express API on Firestore, deployable as a Firebase Function
+docs/              product overview, API plan, architecture diagram
 ```
 
 ## Setup
 
-Create `.env` in the repo root:
-
-```env
-PLAID_CLIENT_ID=…
-PLAID_CLIENT_SECRET=…          # sandbox secret
-NEWS_API_KEY=…
-SPOTIFY_CLIENT_ID=…
-SPOTIFY_CLIENT_SECRET=…        # unused by the app; PKCE needs no secret
-TICKETMASTER_API_KEY=…
+```bash
+pnpm install
+cp .env.example .env          # then fill it in
+pnpm --filter @myos/shared build
 ```
+
+`apps/web/.env` is a symlink to the root `.env`, so keys live in exactly one
+place. The API reads the same file through `--env-file`.
 
 Authorize Spotify once — it opens a browser and stores a refreshing token in
 `.spotify_tokens.json`:
 
 ```bash
-./spotify_pkce.py login
+python3 spotify_pkce.py
 ```
 
-This requires `http://127.0.0.1:8888/callback` to be registered as a Redirect URI
-on the Spotify app (loopback is allowed; no public site needed).
-
-Then:
+## Running
 
 ```bash
-cd apps/web && npm install && npm run dev
+pnpm web dev        # http://localhost:3000
+pnpm api dev        # http://localhost:8787
+pnpm typecheck      # every package, via turbo
+pnpm test           # api tests (node:test, no Firestore needed)
 ```
 
-`apps/web/.env` is a symlink to the root `.env`, so keys live in exactly one place.
-
-## Data sources
+## Data sources (web)
 
 | Section | Source | Notes |
 | --- | --- | --- |
-| Money | Plaid **sandbox** | mints and caches its own access token on first request |
+| Money | Plaid | reads every linked bank in `~/.plaid/tokens.json`; link one with `python3 ~/.claude/skills/plaid/link_server.py <bank>`. `PLAID_ENV=sandbox` mints a fake bank instead |
 | News | NewsAPI | US top headlines |
 | Music | Spotify | recently played + top artists, user-scoped via PKCE |
 | Events | Ticketmaster | upcoming Miami events, recurring runs collapsed |
 
-Each source is fetched in a server component, so no key reaches the browser. A
-failing source degrades to a note in place of its section rather than taking the
-page down.
+## API
 
-## Design
-
-Every color, type size and spacing value is a CSS custom property at the top of
-`apps/web/src/app/globals.css`, exposed to Tailwind via `@theme`. Restyling means
-editing that block — components reference tokens only.
-
-## Not included yet
-
-No auth, no database, no persistence beyond the local token caches. Reads only.
+See `packages/api/README.md` for auth levels, the domain recipe and query
+syntax. Design rationale and build order are in `docs/api-implementation-plan.md`.
