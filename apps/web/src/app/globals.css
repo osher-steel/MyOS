@@ -12,6 +12,7 @@
   --ink-muted: #6b675c;
   --rule: #d8d3c7;
   --accent: #8a2b14;
+  --positive: #3f7a32;
 
   /* Chart series — validated for CVD and contrast against --paper */
   --chart-entry: #17907c;
@@ -20,14 +21,18 @@
 
   /* Type scale */
   --text-masthead: 2.75rem;
+  --text-figure: 2.5rem;
+  --text-month: 1.75rem;
+  --text-figure-aside: 1.375rem;
   --text-section: 0.72rem;
-  --text-headline: 1.05rem;
+  --text-headline: 1.0625rem;
   --text-body: 0.9rem;
+  --text-small: 0.8125rem;
   --text-meta: 0.72rem;
 
   /* Rhythm */
   --gutter: 2.25rem;
-  --stack: 1.1rem;
+  --stack: 0.625rem;
   --measure: 34rem;
   --rule-weight: 1px;
 }
@@ -39,6 +44,7 @@
     --ink-muted: #8e887a;
     --rule: #2e2b25;
     --accent: #d4703f;
+    --positive: #8fbf7f;
     --chart-entry: #26a892;
     --chart-spent: #cf6a3a;
     --chart-savings: #5f84d8;
@@ -52,6 +58,7 @@
   --color-muted: var(--ink-muted);
   --color-rule: var(--rule);
   --color-accent: var(--accent);
+  --color-positive: var(--positive);
 
   --font-display: var(--font-serif-display), Georgia, serif;
   --font-sans: var(--font-sans-ui), system-ui, sans-serif;
@@ -94,7 +101,7 @@ body {
   }
 
   .entry {
-    padding: 0.6rem 0;
+    padding: 0.75rem 0;
     border-bottom: var(--rule-weight) solid var(--rule);
   }
   .entry:last-child {

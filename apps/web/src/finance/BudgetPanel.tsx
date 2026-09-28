@@ -1,6 +1,6 @@
 "use client";
 
-import { BudgetGroup, budgetUsage, type Budget, type GroupUsage } from "@myos/shared";
+import { BudgetGroup, type BudgetUsage, type GroupUsage } from "@myos/shared";
 import { Section, SourceError } from "@/components/editorial";
 import { money } from "@/lib/format";
 
@@ -10,19 +10,10 @@ const GROUP_LABELS: Record<BudgetGroup, string> = {
   [BudgetGroup.SAVINGS]: "Savings",
 };
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="entry-meta uppercase tracking-[0.18em]">{label}</div>
-      <div className="figure text-[var(--text-headline)]">{value}</div>
-    </div>
-  );
-}
-
-function UsedOf({ used, allocated, savings }: { used: number; allocated: number; savings: boolean }) {
+function UsedOf({ used, allocated, savings, small }: { used: number; allocated: number; savings: boolean; small?: boolean }) {
   const over = savings ? used < allocated : used > allocated;
   return (
-    <span className="figure shrink-0">
+    <span className={`figure shrink-0 ${small ? "text-[length:var(--text-small)]" : ""}`}>
       <span className={over ? "text-accent" : undefined}>{money(used)}</span>
       <span className="text-muted"> / {money(allocated)}</span>
     </span>
@@ -32,21 +23,22 @@ function UsedOf({ used, allocated, savings }: { used: number; allocated: number;
 function GroupRow({ usage }: { usage: GroupUsage }) {
   const savings = usage.group === BudgetGroup.SAVINGS;
   return (
-    <details className="disclosure entry">
-      <summary className="flex items-baseline justify-between gap-4">
-        <span className="entry-title">
-          <span className="disclosure-toggle text-muted" /> {GROUP_LABELS[usage.group]}
+    <details className="disclosure border-b border-rule last:border-b-0" open={usage.group === BudgetGroup.NEEDS}>
+      <summary className="flex items-center justify-between gap-4 py-3">
+        <span className="flex items-center gap-2.5">
+          <span className="disclosure-toggle text-muted" />
+          <span className="entry-title">{GROUP_LABELS[usage.group]}</span>
         </span>
         <UsedOf used={usage.used} allocated={usage.allocated} savings={savings} />
       </summary>
-      <div className="mt-2 pl-5">
+      <div className="pb-3 pl-[26px]">
         {usage.categories.length === 0 ? (
-          <p className="entry-meta py-2">Nothing allocated.</p>
+          <p className="entry-meta py-1.5">Nothing allocated.</p>
         ) : (
           usage.categories.map((category) => (
             <div key={category.name} className="flex items-baseline justify-between gap-4 py-1.5">
-              <span className="min-w-0">{category.name}</span>
-              <UsedOf used={category.used} allocated={category.allocated} savings={savings} />
+              <span className="min-w-0 truncate">{category.name}</span>
+              <UsedOf used={category.used} allocated={category.allocated} savings={savings} small />
             </div>
           ))
         )}
@@ -56,36 +48,32 @@ function GroupRow({ usage }: { usage: GroupUsage }) {
 }
 
 export default function BudgetPanel({
-  budget,
+  usage,
   loading,
   error,
-  usedByLabel,
-  unlabelledSpent,
 }: {
-  budget: Budget | null;
+  usage: BudgetUsage | null;
   loading: boolean;
   error: string | null;
-  usedByLabel: Record<string, number>;
-  unlabelledSpent: number;
 }) {
-  if (error) return <SourceError message={error} />;
-  if (loading) return <p className="entry-meta">Loading…</p>;
-  if (!budget) return <p className="entry-meta">No budget for this month yet.</p>;
-
-  const usage = budgetUsage(budget, usedByLabel, { unlabelledSpent });
-
   return (
-    <div className="flex flex-col gap-10">
-      <div className="grid grid-cols-2 gap-x-8">
-        <Stat label="Allocated" value={money(usage.allocated)} />
-        <Stat label="Unallocated" value={money(usage.unallocated)} />
-      </div>
-
-      <Section label="Budget" aside="used / allocated">
-        {usage.groups.map((group) => (
-          <GroupRow key={group.group} usage={group} />
-        ))}
-      </Section>
-    </div>
+    <Section label="Budget" aside="used / allocated">
+      {error ? (
+        <SourceError message={error} />
+      ) : loading ? (
+        <p className="entry-meta">Loading…</p>
+      ) : !usage ? (
+        <p className="entry-meta">No budget for this month yet.</p>
+      ) : (
+        <>
+          <div className="-mt-2.5">
+            {usage.groups.map((group) => (
+              <GroupRow key={group.group} usage={group} />
+            ))}
+          </div>
+          <p className="entry-meta">Savings is filled when the month closes.</p>
+        </>
+      )}
+    </Section>
   );
 }

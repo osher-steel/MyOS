@@ -1,4 +1,12 @@
-import { MonthOutcome, PlaidTransactionStatus, toCents, type LineEntryView, type MonthReport } from "@myos/shared";
+import {
+  LabelSource,
+  labelSourceOf,
+  MonthOutcome,
+  PlaidTransactionStatus,
+  toCents,
+  type LineEntryView,
+  type MonthReport,
+} from "@myos/shared";
 
 export function money(amountCents: number | null, { currency = "USD", cents = false } = {}): string {
   if (amountCents === null) return "—";
@@ -24,9 +32,14 @@ export function clock(iso: string): string {
 }
 
 export function transactionMeta(entry: LineEntryView): string {
-  const parts = [day(entry.date), entry.label ?? "unlabelled"];
+  const parts = [day(entry.date)];
   if (entry.plaidStatus === PlaidTransactionStatus.PENDING) parts.push("pending");
+  if (labelSourceOf(entry) === LabelSource.RULE) parts.push("auto-labelled");
   return parts.join(" · ");
+}
+
+export function daysLeftInMonth(now = new Date()): number {
+  return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
 }
 
 export function reportSummary(report: MonthReport, inProgress: boolean): string {

@@ -9,9 +9,9 @@ export async function PATCH(req: Request, { params }: Params) {
   const { monthYear, id } = await params;
   if (!isMonthYear(monthYear)) return invalidMonth();
 
-  const { label } = (await req.json()) as { label: string };
+  const { label, tags } = (await req.json()) as Pick<LineEntry, "label" | "tags">;
   try {
-    const entry = await apiFetch<LineEntry>(`/line-entries/${id}`, { method: "PATCH", body: JSON.stringify({ label }) });
+    const entry = await apiFetch<LineEntry>(`/line-entries/${id}`, { method: "PATCH", body: JSON.stringify({ label, tags }) });
     return NextResponse.json({ data: entry });
   } catch (error) {
     return fromError(error);

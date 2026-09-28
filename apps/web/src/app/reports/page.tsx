@@ -1,16 +1,17 @@
+import { isMonthYear, nextMonthYear, toMonthYear } from "@myos/shared";
 import { Masthead } from "@/components/masthead";
-import FinancePanels from "./FinancePanels";
+import ReportsView from "@/finance/ReportsView";
 
 export const dynamic = "force-dynamic";
 
-export default function Finance() {
+export default async function Reports({ searchParams }: PageProps<"/reports">) {
+  const { month } = await searchParams;
+  const initialMonth = typeof month === "string" && isMonthYear(month) && month <= nextMonthYear(toMonthYear()) ? month : undefined;
+
   return (
     <main className="mx-auto max-w-6xl px-6 py-12 md:py-16">
-      <Masthead title="Finance" current="finance" />
-
-      <div className="grid gap-x-[var(--gutter)] gap-y-12 md:grid-cols-2">
-        <FinancePanels />
-      </div>
+      <Masthead title="Monthly Reports" current="reports" />
+      <ReportsView initialMonth={initialMonth} />
     </main>
   );
 }

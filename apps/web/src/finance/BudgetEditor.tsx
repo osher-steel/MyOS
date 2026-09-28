@@ -1,6 +1,6 @@
 "use client";
 
-import { BudgetGroup, formatMonthYear, type BudgetAllocations, type MonthYear } from "@myos/shared";
+import { BudgetGroup, formatMonthYear, toMonthYear, type BudgetAllocations, type MonthYear } from "@myos/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -98,13 +98,14 @@ export default function BudgetEditor({ monthYear }: { monthYear: MonthYear }) {
   const remainder = remainderForSavings(edit.draft);
   const unplaced = edit.draft.income - totalAllocated(edit.draft);
   const savingsName = Object.keys(edit.draft.savings)[0] ?? DEFAULT_SAVINGS;
+  const backTo = monthYear > toMonthYear() ? `/reports?month=${monthYear}` : "/";
 
   if (!edit.editable) {
     return (
       <p className="entry-meta">
         {formatMonthYear(monthYear)} is in the past and can no longer be edited.{" "}
-        <Link href="/finance" className="entry-link">
-          Back to Finance
+        <Link href="/" className="entry-link">
+          Back to Home
         </Link>
       </p>
     );
@@ -114,7 +115,7 @@ export default function BudgetEditor({ monthYear }: { monthYear: MonthYear }) {
 
   async function onSave() {
     const saved = await edit.save();
-    if (saved) router.push("/finance");
+    if (saved) router.push(backTo);
   }
 
   return (
@@ -186,7 +187,7 @@ export default function BudgetEditor({ monthYear }: { monthYear: MonthYear }) {
         <button type="button" onClick={onSave} disabled={edit.saving} className="entry-title">
           {edit.saving ? "Saving…" : edit.existing ? "Save changes" : "Create budget"}
         </button>
-        <Link href="/finance" className="entry-meta">
+        <Link href={backTo} className="entry-meta">
           cancel
         </Link>
         <Field message={edit.errors.main} />

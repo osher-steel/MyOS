@@ -7,7 +7,7 @@ export function Section({
   children,
 }: {
   label: string;
-  aside?: string;
+  aside?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -21,36 +21,68 @@ export function Section({
   );
 }
 
-/** One row: a title, optional supporting meta, optional right-aligned figure. */
+/** One row: a title, optional supporting meta, an optional label slot, and a right-aligned figure. */
 export function Entry({
   title,
   meta,
+  metaAside,
   figure,
+  positive,
   href,
-  children,
+  label,
+  onOpen,
+  className,
 }: {
   title: string;
-  meta?: string;
+  meta?: ReactNode;
+  metaAside?: ReactNode;
   figure?: string;
+  positive?: boolean;
   href?: string;
-  children?: ReactNode;
+  label?: ReactNode;
+  onOpen?: () => void;
+  className?: string;
 }) {
+  const heading = (
+    <div className="entry-title truncate">
+      {href ? (
+        <a className="entry-link" href={href} target="_blank" rel="noreferrer">
+          {title}
+        </a>
+      ) : (
+        title
+      )}
+    </div>
+  );
+  const metaLine = meta ? <span className="entry-meta truncate leading-normal">{meta}</span> : null;
+
   return (
-    <div className="entry flex gap-4 items-baseline justify-between">
-      <div className="min-w-0">
-        <div className="entry-title">
-          {href ? (
-            <a className="entry-link" href={href} target="_blank" rel="noreferrer">
-              {title}
-            </a>
-          ) : (
-            title
-          )}
-        </div>
-        {meta ? <div className="entry-meta mt-0.5">{meta}</div> : null}
-        {children ? <div className="mt-1">{children}</div> : null}
+    <div className={`entry group flex items-center gap-4 ${className ?? ""}`}>
+      <div className="min-w-0 flex-1">
+        {onOpen ? (
+          <button type="button" onClick={onOpen} className="block max-w-full cursor-pointer text-left hover:text-accent">
+            {heading}
+          </button>
+        ) : (
+          heading
+        )}
+        {metaLine || metaAside ? (
+          <div className="mt-[3px] flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+            {onOpen && metaLine ? (
+              <button type="button" tabIndex={-1} onClick={onOpen} className="min-w-0 max-w-full cursor-pointer truncate text-left">
+                {metaLine}
+              </button>
+            ) : (
+              metaLine
+            )}
+            {metaAside}
+          </div>
+        ) : null}
       </div>
-      {figure ? <div className="figure shrink-0">{figure}</div> : null}
+      <div className="flex shrink-0 flex-col items-end gap-1 md:flex-row md:items-center md:gap-4">
+        {figure ? <div className={`figure order-first text-right md:order-last md:w-[110px] ${positive ? "text-positive" : ""}`}>{figure}</div> : null}
+        {label}
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { formatMonthYear, type MonthReport } from "@myos/shared";
 import { useId, useState } from "react";
 import { Section, SourceError } from "@/components/editorial";
 import { money } from "@/lib/format";
+import { useWidth } from "./useWidth";
 
 const SERIES = [
   { key: "entry", label: "Entry", color: "var(--chart-entry)" },
@@ -11,9 +12,9 @@ const SERIES = [
   { key: "savingsActual", label: "Savings", color: "var(--chart-savings)" },
 ] as const;
 
-const WIDTH = 640;
+const DEFAULT_WIDTH = 640;
 const HEIGHT = 240;
-const PAD = { top: 12, right: 8, bottom: 28, left: 52 };
+const PAD = { top: 12, right: 8, bottom: 28, left: 68 };
 const GAP = 2;
 const RADIUS = 4;
 
@@ -26,9 +27,9 @@ function niceMax(value: number): number {
   return Math.ceil(value / step) * step;
 }
 
-function roundedTopBar(x: number, y: number, w: number, h: number): string {
+export function roundedTopBar(x: number, y: number, w: number, h: number, radius = RADIUS): string {
   if (h <= 0) return "";
-  const r = Math.min(RADIUS, h, w / 2);
+  const r = Math.min(radius, h, w / 2);
   return `M${x},${y + h} V${y + r} Q${x},${y} ${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h} Z`;
 }
 
@@ -73,13 +74,14 @@ export default function HistoryChart({
   const [view, setView] = useState<"chart" | "table">("chart");
   const [hover, setHover] = useState<number | null>(null);
   const titleId = useId();
+  const [measure, width] = useWidth(DEFAULT_WIDTH);
 
   if (error) return <SourceError message={error} />;
   if (loading || !reports) return <p className="entry-meta">Loading…</p>;
   if (reports.length === 0) return <p className="entry-meta">No months to show yet.</p>;
 
   const max = niceMax(Math.max(...reports.flatMap((r) => SERIES.map((s) => r[s.key]))));
-  const plotW = WIDTH - PAD.left - PAD.right;
+  const plotW = width - PAD.left - PAD.right;
   const plotH = HEIGHT - PAD.top - PAD.bottom;
   const slot = plotW / reports.length;
   const barW = (slot * 0.7 - GAP * (SERIES.length - 1)) / SERIES.length;
@@ -106,12 +108,12 @@ export default function HistoryChart({
       {view === "table" ? (
         <Table reports={reports} />
       ) : (
-        <div className="relative">
-          <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-labelledby={titleId} className="w-full" onMouseLeave={() => setHover(null)}>
+        <div ref={measure} className="relative">
+          <svg viewBox={`0 0 ${width} ${HEIGHT}`} role="img" aria-labelledby={titleId} className="w-full" onMouseLeave={() => setHover(null)}>
             <title id={titleId}>Entry, spent and savings per month</title>
             {ticks.map((t) => (
               <g key={t}>
-                <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(t)} y2={y(t)} stroke="var(--rule)" strokeWidth={1} />
+                <line x1={PAD.left} x2={width - PAD.right} y1={y(t)} y2={y(t)} stroke="var(--rule)" strokeWidth={1} />
                 <text x={PAD.left - 8} y={y(t)} dy="0.32em" textAnchor="end" className="figure" fill="var(--ink-muted)" fontSize={10}>
                   {money(t)}
                 </text>
@@ -132,13 +134,13 @@ export default function HistoryChart({
                 </g>
               );
             })}
-            <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(0)} y2={y(0)} stroke="var(--ink)" strokeWidth={1} />
+            <line x1={PAD.left} x2={width - PAD.right} y1={y(0)} y2={y(0)} stroke="var(--ink)" strokeWidth={1} />
           </svg>
 
           {hovered ? (
             <div
               className="pointer-events-none absolute top-0 border border-rule bg-paper px-3 py-2 text-[var(--text-meta)]"
-              style={{ left: `${((PAD.left + (hover! + 0.5) * slot) / WIDTH) * 100}%`, transform: "translateX(-50%)" }}
+              style={{ left: `${((PAD.left + (hover! + 0.5) * slot) / width) * 100}%`, transform: "translateX(-50%)" }}
             >
               <div className="entry-meta mb-1">{formatMonthYear(hovered.monthYear)}</div>
               {SERIES.map((s) => (

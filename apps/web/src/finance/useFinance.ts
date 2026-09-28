@@ -1,10 +1,12 @@
 "use client";
 
 import {
+  budgetUsage,
   groupLineEntries,
   monthReport,
   toMonthYear,
   totalLineEntries,
+  type LineEntry,
   type LineEntryView,
   type MonthReport,
   type MonthYear,
@@ -12,21 +14,33 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchBudget } from "@/lib/budgetsClient";
 import { fetchPastReports } from "@/lib/reportsClient";
-import { fetchLineEntries, saveLabel, syncTransactions } from "@/lib/transactionsClient";
+import { fetchLineEntries, patchLineEntry, syncTransactions } from "@/lib/transactionsClient";
 import useMonthlySource from "./useMonthlySource";
 
-const HISTORY_MONTHS = 6;
-
-type SyncState = { syncing: boolean; error: string | null; version: number };
+export type SyncState = {
+  syncing: boolean;
+  error: string | null;
+  version: number;
+  institutions: string[];
+  syncedAt: Date | null;
+  autoLabelled: number;
+};
 
 /**
  * The ledger renders straight away while a bank sync runs in the background;
  * if the sync changed anything, the ledger and history are fetched again.
  */
-export default function useFinance() {
-  const [monthYear, setMonthYear] = useState<MonthYear>(() => toMonthYear());
+export default function useFinance({ historyMonths = 6, initialMonth }: { historyMonths?: number; initialMonth?: MonthYear } = {}) {
+  const [monthYear, setMonthYear] = useState<MonthYear>(() => initialMonth ?? toMonthYear());
   const isCurrent = monthYear === toMonthYear();
-  const [sync, setSync] = useState<SyncState>({ syncing: true, error: null, version: 0 });
+  const [sync, setSync] = useState<SyncState>({
+    syncing: true,
+    error: null,
+    version: 0,
+    institutions: [],
+    syncedAt: null,
+    autoLabelled: 0,
+  });
   const budget = useMonthlySource(monthYear, fetchBudget);
   const stored = useMonthlySource(monthYear, fetchLineEntries, sync.version);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -35,12 +49,20 @@ export default function useFinance() {
   useEffect(() => {
     let ignore = false;
     syncTransactions()
-      .then(({ items, reports }) => reports.length > 0 || items.some((item) => item.months.length > 0))
-      .then((changed) => ({ changed, error: null }))
-      .catch((err: Error) => ({ changed: false, error: err.message }))
-      .then(({ changed, error }) => {
+      .then(({ items, reports }) => {
         if (ignore) return;
-        setSync((prev) => ({ syncing: false, error, version: changed ? prev.version + 1 : prev.version }));
+        const changed = reports.length > 0 || items.some((item) => item.months.length > 0);
+        setSync((prev) => ({
+          syncing: false,
+          error: null,
+          version: changed ? prev.version + 1 : prev.version,
+          institutions: items.map((item) => item.institution),
+          syncedAt: new Date(),
+          autoLabelled: items.reduce((sum, item) => sum + (item.autoLabelled ?? 0), 0),
+        }));
+      })
+      .catch((err: Error) => {
+        if (!ignore) setSync((prev) => ({ ...prev, syncing: false, error: err.message }));
       });
     return () => {
       ignore = true;
@@ -49,7 +71,7 @@ export default function useFinance() {
 
   useEffect(() => {
     let ignore = false;
-    fetchPastReports(HISTORY_MONTHS)
+    fetchPastReports(historyMonths)
       .then((reports) => ({ reports, error: null }))
       .catch((err: Error) => ({ reports: [], error: err.message }))
       .then((result) => {
@@ -58,18 +80,22 @@ export default function useFinance() {
     return () => {
       ignore = true;
     };
-  }, [sync.version]);
+  }, [historyMonths, sync.version]);
 
   const groups = useMemo(() => groupLineEntries(stored.data ?? []), [stored.data]);
   const totals = useMemo(() => totalLineEntries(groups), [groups]);
   const report = useMemo(() => monthReport(monthYear, budget.data, groups.all), [monthYear, budget.data, groups]);
+  const usage = useMemo(
+    () => (budget.data ? budgetUsage(budget.data, totals.usedByLabel, { unlabelledSpent: totals.spentUnlabelled }) : null),
+    [budget.data, totals],
+  );
 
   const updateStored = stored.update;
-  const labelEntry = useCallback(
-    async (entry: LineEntryView, label: string) => {
+  const saveEntry = useCallback(
+    async (entry: LineEntryView, patch: Partial<Pick<LineEntry, "label" | "tags">>) => {
       setSaveError(null);
       try {
-        const saved = await saveLabel(entry, label);
+        const saved = await patchLineEntry(entry, patch);
         updateStored((rows) => [...rows.filter((row) => row.id !== saved.id), saved]);
       } catch (err) {
         setSaveError((err as Error).message);
@@ -77,6 +103,8 @@ export default function useFinance() {
     },
     [updateStored],
   );
+  const labelEntry = useCallback((entry: LineEntryView, label: string) => saveEntry(entry, { label }), [saveEntry]);
+  const tagEntry = useCallback((entry: LineEntryView, tags: string[]) => saveEntry(entry, { tags }), [saveEntry]);
 
   const history = useMemo(() => {
     if (!past) return null;
@@ -86,20 +114,16 @@ export default function useFinance() {
   return {
     monthYear,
     setMonthYear,
-    budget: {
-      budget: budget.data,
-      loading: budget.loading,
-      error: budget.error,
-      usedByLabel: totals.usedByLabel,
-      unlabelledSpent: totals.spentUnlabelled,
-    },
+    sync,
+    budget: { usage, loading: budget.loading, error: budget.error },
     transactions: {
       groups,
       totals,
       budget: budget.data,
       labelEntry,
+      tagEntry,
       loading: stored.loading,
-      syncing: sync.syncing,
+      sync,
       errors: { api: stored.error, sync: sync.error, save: saveError },
     },
     report: {
