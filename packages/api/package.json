@@ -13,9 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint",
     "test": "node --import tsx --test $(find tests -name '*.test.ts' -print)",
-    "clean": "rm -rf dist",
-    "seed": "node --env-file=../../.env --import tsx scripts/seed.ts",
-    "seed:clean": "node --env-file=../../.env --import tsx scripts/seed.ts --clean"
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "cors": "^2.8.6",
