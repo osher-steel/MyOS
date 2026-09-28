@@ -1,4 +1,5 @@
 import { BudgetGroup, type Budget } from "../types/interfaces/finance.js";
+import { splitProportionally } from "./money.js";
 
 export type CategoryUsage = { name: string; used: number; allocated: number };
 export type GroupUsage = { group: BudgetGroup; used: number; allocated: number; categories: CategoryUsage[] };
@@ -40,11 +41,8 @@ function savingsUsage(budget: Budget, delta: number): GroupUsage {
   const entries = Object.entries(budget[BudgetGroup.SAVINGS]);
   const allocated = sum(entries.map(([, amount]) => amount));
   const kept = Math.max(0, allocated + delta);
-  const categories = entries.map(([name, amount]) => ({
-    name,
-    allocated: amount,
-    used: allocated === 0 ? 0 : (amount / allocated) * kept,
-  }));
+  const shares = splitProportionally(kept, entries.map(([, amount]) => amount));
+  const categories = entries.map(([name, amount], i) => ({ name, allocated: amount, used: shares[i]! }));
   return { group: BudgetGroup.SAVINGS, categories, used: kept, allocated };
 }
 

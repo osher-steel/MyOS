@@ -11,7 +11,7 @@ export const lineEntryPostSchema = z
   .object({
     id: nonEmptyString,
     name: nonEmptyString,
-    amount: z.number().finite(),
+    amount: z.number().int(),
     date: dayDate,
     currency: currency.default("USD"),
     label: label.optional(),
@@ -22,7 +22,7 @@ export const lineEntryPostSchema = z
 
 export const lineEntryPatchSchema = z
   .object({
-    amount: z.number().finite(),
+    amount: z.number().int(),
     label,
     plaidStatus: z.enum(PlaidTransactionStatus),
     osStatus: z.enum(LineEntryStatus),
@@ -34,7 +34,7 @@ export const lineEntryPatchSchema = z
 export const lineEntryRecordSchema = z
   .object({
     name: nonEmptyString,
-    amount: z.number().finite(),
+    amount: z.number().int(),
     date: dayDate,
     monthYear: monthYearSchema,
     currency,

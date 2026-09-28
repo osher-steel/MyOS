@@ -1,13 +1,16 @@
-import { MonthOutcome, PlaidTransactionStatus, type LineEntryView, type MonthReport } from "@myos/shared";
+import { MonthOutcome, PlaidTransactionStatus, toCents, type LineEntryView, type MonthReport } from "@myos/shared";
 
-export function money(amount: number | null, { currency = "USD", cents = false } = {}): string {
-  if (amount === null) return "—";
+export function money(amountCents: number | null, { currency = "USD", cents = false } = {}): string {
+  if (amountCents === null) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
     maximumFractionDigits: cents ? 2 : 0,
-  }).format(amount);
+  }).format(amountCents / 100);
 }
+
+export const dollarsInput = (amountCents: number) => amountCents / 100;
+export const centsFromInput = (value: string) => toCents(Number(value) || 0);
 
 // "2026-08-12" parses as UTC midnight and renders as the previous day west of
 // Greenwich, so date-only values are pinned to local time before formatting.

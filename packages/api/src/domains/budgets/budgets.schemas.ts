@@ -2,9 +2,8 @@ import { BudgetGroup, isMonthYear } from "@myos/shared";
 import z from "zod";
 
 const categoryName = z.string().trim().min(1, "Category name is required.").max(64);
-const amount = z.number().finite().min(0);
+const amount = z.number().int("Amounts are whole cents.").min(0);
 
-/** Category name → amount allocated. Amounts are non-negative numbers. */
 export const budgetAllocationsSchema = z.record(categoryName, amount);
 
 export const monthYearSchema = z

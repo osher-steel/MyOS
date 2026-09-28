@@ -9,15 +9,13 @@ export enum BudgetGroup {
   SAVINGS = "savings",
 }
 
-/** Category name → amount allocated for the month. */
-export type BudgetAllocations = Record<string, number>;
+export type BudgetAllocations = Record<string, number>; // category name → cents
 
 export interface Budget {
   id: string;
   createdAt: FireTimestampLike;
   updatedAt: FireTimestampLike;
-  /** Expected money in for the month. Allocations across all groups may not exceed it. */
-  income: number;
+  income: number; // cents; allocations across all groups may not exceed it
   needs: BudgetAllocations;
   wants: BudgetAllocations;
   savings: BudgetAllocations;
@@ -38,7 +36,7 @@ export enum LineEntryStatus {
 export interface LineEntry {
   id: string; // Plaid transaction_id, so re-sync is idempotent
   name: string;
-  amount: number; // Plaid sign: positive is money out
+  amount: number; // cents, Plaid sign: positive is money out
   date: ISODateString; // YYYY-MM-DD
   monthYear: MonthYear;
   currency: string;
@@ -55,7 +53,7 @@ export type LineEntryView = Omit<LineEntry, "createdAt" | "updatedAt">;
 export interface PlaidTransaction {
   id: string;
   name: string;
-  amount: number;
+  amount: number; // cents
   date: ISODateString;
   currency: string;
   pending: boolean;

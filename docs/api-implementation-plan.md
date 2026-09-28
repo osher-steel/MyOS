@@ -236,7 +236,7 @@ context read through the same REST resources the UI uses.
    pathed from `.env` and gitignored — the repo is public.
 2. **Timestamps.** Store Firestore `Timestamp`, serialize to ISO strings on read
    (`firestoreSanitize`), so the API contract is plain JSON.
-3. **Money.** Store integer cents, not floats. Plaid returns floats; convert at the
+3. **Money.** Store integer cents, not floats (done 2026-09-27). Plaid returns floats; convert at the
    integration boundary, once.
 4. **Category enum.** Lives in `budgets` as an editable array, so it cannot be a
    TypeScript enum. Validate transaction `category` against the active budget's

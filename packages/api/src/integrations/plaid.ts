@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { PlaidSyncDelta, PlaidTransaction } from "@myos/shared";
+import { toCents, type PlaidSyncDelta, type PlaidTransaction } from "@myos/shared";
 import { ServiceUpstreamError } from "../core/errors/errors.js";
 
 export type PlaidItem = { itemId: string; accessToken: string; institution: string };
@@ -80,7 +80,7 @@ function toTransaction(row: PlaidTransactionRow): PlaidTransaction {
   return {
     id: row.transaction_id,
     name: row.name,
-    amount: row.amount,
+    amount: toCents(row.amount),
     date: row.date,
     currency: row.iso_currency_code ?? "USD",
     pending: row.pending,

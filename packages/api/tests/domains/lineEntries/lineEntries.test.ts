@@ -18,7 +18,7 @@ import { lineEntryPatchSchema, lineEntryPostSchema } from "../../../src/domains/
 const post = {
   id: "txn_1",
   name: "Publix",
-  amount: 42.5,
+  amount: 4250,
   date: "2026-09-03",
   plaidStatus: PlaidTransactionStatus.POSTED,
 };
@@ -27,7 +27,7 @@ function stored(overrides: Partial<LineEntry>): LineEntry {
   return {
     id: "txn_1",
     name: "Publix",
-    amount: 42.5,
+    amount: 4250,
     date: "2026-09-03",
     monthYear: "2026-09",
     currency: "USD",
@@ -40,11 +40,12 @@ function stored(overrides: Partial<LineEntry>): LineEntry {
 }
 
 function live(overrides: Partial<PlaidTransaction>): PlaidTransaction {
-  return { id: "txn_1", name: "Publix", amount: 42.5, date: "2026-09-03", currency: "USD", pending: false, ...overrides };
+  return { id: "txn_1", name: "Publix", amount: 4250, date: "2026-09-03", currency: "USD", pending: false, ...overrides };
 }
 
-test("line entry create needs the Plaid id and a day date, and defaults currency", () => {
+test("line entry create needs the Plaid id, a day date and whole cents, and defaults currency", () => {
   const parsed = lineEntryPostSchema.parse(post);
+  assert.equal(lineEntryPostSchema.safeParse({ ...post, amount: 42.5 }).success, false);
   assert.equal(parsed.currency, "USD");
   assert.equal(lineEntryPostSchema.safeParse({ ...post, id: undefined }).success, false);
   assert.equal(lineEntryPostSchema.safeParse({ ...post, date: "2026-09" }).success, false);
@@ -82,7 +83,7 @@ const delta = (overrides: Partial<PlaidSyncDelta>): PlaidSyncDelta => ({ added: 
 const storedMap = (...rows: LineEntry[]) => new Map(rows.map((row) => [row.id, row]));
 
 test("sync creates unlabelled rows for every new transaction, labelled or not", () => {
-  const plan = planSync(delta({ added: [live({}), live({ id: "txn_2", name: "Payroll", amount: -3000 })] }), new Map());
+  const plan = planSync(delta({ added: [live({}), live({ id: "txn_2", name: "Payroll", amount: -300000 })] }), new Map());
   assert.deepEqual(
     plan.creates.map((row) => [row.id, row.monthYear, row.osStatus, row.label]),
     [
@@ -94,14 +95,14 @@ test("sync creates unlabelled rows for every new transaction, labelled or not", 
 });
 
 test("sync keeps a manual label when Plaid modifies the transaction", () => {
-  const labelled = stored({ label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: 40 });
-  const plan = planSync(delta({ modified: [live({ amount: 42.5 })] }), storedMap(labelled));
+  const labelled = stored({ label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: 4000 });
+  const plan = planSync(delta({ modified: [live({ amount: 4250 })] }), storedMap(labelled));
   assert.equal(plan.creates.length, 0);
   assert.deepEqual(plan.updates, [
     {
       id: "txn_1",
       name: "Publix",
-      amount: 42.5,
+      amount: 4250,
       date: "2026-09-03",
       monthYear: "2026-09",
       currency: "USD",
@@ -151,16 +152,16 @@ test("touched months include where removed and settled rows lived", () => {
 
 test("grouping drops removed rows, splits on label, and totals outflows per label with sign", () => {
   const groups = groupLineEntries([
-    stored({ id: "a", label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: 40 }),
-    stored({ id: "b", label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: -10 }),
-    stored({ id: "c", amount: 25 }),
-    stored({ id: "d", name: "Payroll", amount: -3000 }),
-    stored({ id: "e", amount: 99, plaidStatus: PlaidTransactionStatus.REMOVED }),
+    stored({ id: "a", label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: 4000 }),
+    stored({ id: "b", label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: -1000 }),
+    stored({ id: "c", amount: 2500 }),
+    stored({ id: "d", name: "Payroll", amount: -300000 }),
+    stored({ id: "e", amount: 9900, plaidStatus: PlaidTransactionStatus.REMOVED }),
   ]);
   assert.deepEqual(
     [groups.all.length, groups.labelled.length, groups.unlabelled.length],
     [4, 2, 2],
   );
   const totals = totalLineEntries(groups);
-  assert.deepEqual(totals, { spent: 65, spentLabelled: 40, spentUnlabelled: 25, usedByLabel: { Groceries: 30 } });
+  assert.deepEqual(totals, { spent: 6500, spentLabelled: 4000, spentUnlabelled: 2500, usedByLabel: { Groceries: 3000 } });
 });

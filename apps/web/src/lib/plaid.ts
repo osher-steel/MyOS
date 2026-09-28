@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { toCents } from "@myos/shared";
 import { env } from "./env";
 
 /**
@@ -129,8 +130,8 @@ export async function getAccounts(): Promise<Account[]> {
         name: account.name,
         mask: account.mask,
         type: account.subtype ?? account.type,
-        current: account.balances.current,
-        available: account.balances.available,
+        current: account.balances.current === null ? null : toCents(account.balances.current),
+        available: account.balances.available === null ? null : toCents(account.balances.available),
         currency: account.balances.iso_currency_code ?? "USD",
         bank: item.institution ?? nickname,
       }));
@@ -155,7 +156,7 @@ export async function getTransactions(limit = 8): Promise<Transaction[]> {
     .slice(0, limit)
     .map((tx) => ({
       name: tx.name,
-      amount: tx.amount,
+      amount: toCents(tx.amount),
       date: tx.date,
       currency: tx.iso_currency_code ?? "USD",
     }));

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Section, SourceError } from "@/components/editorial";
-import { money } from "@/lib/format";
+import { centsFromInput, dollarsInput, money } from "@/lib/format";
 import { DEFAULT_SAVINGS, remainderForSavings, totalAllocated, useFinanceEdit } from "./useFinanceEdit";
 
 const SPENDING_GROUPS: Array<{ id: BudgetGroup; label: string }> = [
@@ -58,8 +58,8 @@ function GroupEditor({
               type="number"
               min={0}
               step={1}
-              value={amount}
-              onChange={(e) => onChange(name, Number(e.target.value) || 0)}
+              value={dollarsInput(amount)}
+              onChange={(e) => onChange(name, centsFromInput(e.target.value))}
               className={`${input} w-28 text-right`}
               aria-label={`${name} amount`}
             />
@@ -136,8 +136,8 @@ export default function BudgetEditor({ monthYear }: { monthYear: MonthYear }) {
             type="number"
             min={0}
             step={1}
-            value={edit.draft.income}
-            onChange={(e) => edit.setIncome(Number(e.target.value) || 0)}
+            value={dollarsInput(edit.draft.income)}
+            onChange={(e) => edit.setIncome(centsFromInput(e.target.value))}
             className={`${input} w-32 text-right`}
             aria-label="Expected income"
           />
