@@ -34,7 +34,14 @@ pnpm web dev        # http://localhost:3000
 pnpm api dev        # http://localhost:8787
 pnpm typecheck      # every package, via turbo
 pnpm test           # api tests (node:test, no Firestore needed)
+pnpm api daily      # sync Plaid and regenerate month reports once
 ```
+
+`packages/api/scripts/install-daily.sh` installs a launchd agent that runs
+`pnpm api daily` every day at 06:00 (a missed run fires on wake). It pins the
+current `node` path, so rerun it after switching Node versions. Logs go to
+`~/Library/Logs/myos-daily.log`; remove it with
+`launchctl bootout gui/$(id -u)/com.myos.daily`.
 
 ## Data sources (web)
 

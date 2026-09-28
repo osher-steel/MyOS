@@ -3,11 +3,13 @@ import {
   budgetId,
   monthReport,
   RequestBuilder,
+  toMonthYear,
   toQueryString,
   type Budget,
   type LineEntry,
   type MonthReport,
   type MonthYear,
+  type StoredMonthReport,
 } from "@myos/shared";
 import { ApiError, apiFetch } from "./api";
 import { env } from "./env";
@@ -26,7 +28,20 @@ function loadLedger(monthYear: MonthYear): Promise<LineEntry[]> {
   return apiFetch<LineEntry[]>(`/line-entries?${query}`);
 }
 
-export async function loadMonthReport(monthYear: MonthYear): Promise<MonthReport> {
+async function computeMonthReport(monthYear: MonthYear): Promise<MonthReport> {
   const [budget, ledger] = await Promise.all([loadBudget(monthYear), loadLedger(monthYear)]);
   return monthReport(monthYear, budget, ledger);
+}
+
+async function loadStoredReports(monthYears: MonthYear[]): Promise<Map<MonthYear, MonthReport>> {
+  if (monthYears.length === 0) return new Map();
+  const query = toQueryString(new RequestBuilder().in("monthYear", monthYears).limit(monthYears.length).toQuery());
+  const stored = await apiFetch<StoredMonthReport[]>(`/month-reports?${query}`);
+  return new Map(stored.map((report) => [report.monthYear, report]));
+}
+
+/** Finished months come from their stored report; the open month, or one never stored, is computed. */
+export async function loadMonthReports(monthYears: MonthYear[]): Promise<MonthReport[]> {
+  const stored = await loadStoredReports(monthYears.filter((month) => month < toMonthYear()));
+  return Promise.all(monthYears.map((month) => stored.get(month) ?? computeMonthReport(month)));
 }

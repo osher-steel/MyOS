@@ -8,7 +8,7 @@ import { z } from "zod";
 import { ServiceNotFoundError } from "../../src/core/errors/errors.js";
 import { defineListQuery } from "../../src/core/firestore/firestoreQuery.js";
 import { defineResource } from "../../src/core/resourceBuilder/resourceBuilder.js";
-import type { DomainInner } from "../../src/core/resourceBuilder/resourceBuilder.types.js";
+import type { DomainInner, WriteChange } from "../../src/core/resourceBuilder/resourceBuilder.types.js";
 
 process.env.MYOS_API_KEY = "myos_test_key";
 
@@ -48,11 +48,16 @@ const recordSchema = createSchema.extend({ createdAt: z.date() });
 const patchSchema = createSchema.partial().strict();
 const query = defineListQuery([{ key: "title", type: "stringFilter", sortable: true }] as const);
 
+const writes: WriteChange[] = [];
+
 const noteDomain: DomainInner = {
   resourceName: "note",
   repo: new MemoryRepo() as never,
   schemas: { query: query.schema, create: createSchema, patch: patchSchema, record: recordSchema },
   buildCreateRecord: (input) => ({ ...(input as object), createdAt: new Date() }),
+  afterWrite: async (change) => {
+    writes.push(change);
+  },
 };
 
 const note = defineResource({
@@ -155,4 +160,22 @@ test("patch, actions and delete run through the same pipeline", async () => {
 
   const gone = await call("GET", `/notes/${id}`);
   assert.equal(gone.status, 404);
+});
+
+test("afterWrite sees before and after for create, patch and delete", async () => {
+  writes.length = 0;
+  const created = await call("POST", "/notes", { title: "Rent" }, OWNER);
+  const id = created.body.data.id as string;
+  await call("PATCH", `/notes/${id}`, { title: "Rent due" }, OWNER);
+  await call("DELETE", `/notes/${id}`, undefined, OWNER);
+
+  const titles = (note: unknown) => (note as Note | null)?.title ?? null;
+  assert.deepEqual(
+    writes.map((change) => [change.id, titles(change.before), titles(change.after)]),
+    [
+      [id, null, "Rent"],
+      [id, "Rent", "Rent due"],
+      [id, "Rent due", null],
+    ],
+  );
 });

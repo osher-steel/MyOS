@@ -1,7 +1,7 @@
 import { previousMonthYear, toMonthYear, type MonthYear } from "@myos/shared";
 import { NextResponse } from "next/server";
 import { fromError } from "@/lib/proxyResponses";
-import { loadMonthReport } from "@/lib/reports";
+import { loadMonthReports } from "@/lib/reports";
 
 const MAX_MONTHS = 24;
 
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    return NextResponse.json({ data: await Promise.all(monthYears.map(loadMonthReport)) });
+    return NextResponse.json({ data: await loadMonthReports(monthYears) });
   } catch (error) {
     return fromError(error);
   }

@@ -1,3 +1,4 @@
+import type { MonthYear } from "../types/interfaces/common.js";
 import {
   LineEntryStatus,
   PlaidTransactionStatus,
@@ -66,6 +67,16 @@ export function planSync(delta: PlaidSyncDelta, stored: ReadonlyMap<string, Stor
   const deleted = new Set(plan.deletes);
   plan.removed = delta.removed.filter((id) => stored.has(id) && !deleted.has(id));
   return plan;
+}
+
+/** Months whose totals a plan changes, including where removed and deleted rows lived. */
+export function touchedMonths(plan: SyncPlan, stored: ReadonlyMap<string, Pick<LineEntryView, "monthYear">>): MonthYear[] {
+  const months = new Set<MonthYear>([...plan.creates, ...plan.updates].map((row) => row.monthYear));
+  for (const id of [...plan.removed, ...plan.deletes]) {
+    const month = stored.get(id)?.monthYear;
+    if (month) months.add(month);
+  }
+  return [...months].sort();
 }
 
 export type LineEntryGroups = {

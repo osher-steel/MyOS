@@ -68,7 +68,11 @@ export type DomainHooks = {
   buildPatchRecord?: (existing: unknown, patch: unknown, client?: Principal) => MaybePromise<Record<string, unknown>>;
   /** transform entity before returning based on client (get / list only) */
   transformEntity?: (entity: unknown, client?: Principal) => MaybePromise<unknown>;
+  /** Runs after a successful create / patch / delete, in the Firestore trigger shape. */
+  afterWrite?: (change: WriteChange) => Promise<void>;
 };
+
+export type WriteChange = { id: string; before: unknown | null; after: unknown | null };
 
 export type DomainInner = {
   resourceName: string;

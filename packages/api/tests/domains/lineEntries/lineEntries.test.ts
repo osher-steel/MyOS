@@ -6,6 +6,7 @@ import {
   PlaidTransactionStatus,
   planSync,
   totalLineEntries,
+  touchedMonths,
   type LineEntry,
   type PlaidSyncDelta,
   type PlaidTransaction,
@@ -135,6 +136,17 @@ test("sync applies the latest version of a transaction added and modified in one
 test("sync skips a transaction added and removed in the same run", () => {
   const plan = planSync(delta({ added: [live({ id: "flash" })], removed: ["flash"] }), new Map());
   assert.deepEqual([plan.creates, plan.removed], [[], []]);
+});
+
+test("touched months include where removed and settled rows lived", () => {
+  const plan = {
+    creates: [{ ...stored({ id: "new" }), monthYear: "2026-09" }],
+    updates: [],
+    removed: ["old"],
+    deletes: ["pend"],
+  };
+  const known = storedMap(stored({ id: "old", monthYear: "2026-07" }), stored({ id: "pend", monthYear: "2026-08" }));
+  assert.deepEqual(touchedMonths(plan, known), ["2026-07", "2026-08", "2026-09"]);
 });
 
 test("grouping drops removed rows, splits on label, and totals outflows per label with sign", () => {

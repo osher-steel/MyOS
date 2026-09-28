@@ -35,7 +35,7 @@ export default function useFinance() {
   useEffect(() => {
     let ignore = false;
     syncTransactions()
-      .then((items) => items.some((item) => item.created + item.updated + item.removed + item.deleted > 0))
+      .then(({ items, reports }) => reports.length > 0 || items.some((item) => item.months.length > 0))
       .then((changed) => ({ changed, error: null }))
       .catch((err: Error) => ({ changed: false, error: err.message }))
       .then(({ changed, error }) => {

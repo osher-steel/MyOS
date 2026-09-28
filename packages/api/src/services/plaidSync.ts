@@ -3,7 +3,9 @@ import {
   PLAID_ITEMS_COLLECTION,
   PlaidTransactionStatus,
   planSync,
+  touchedMonths,
   type LineEntryView,
+  type MonthYear,
   type PlaidSyncDelta,
   type SyncPlan,
 } from "@myos/shared";
@@ -21,6 +23,7 @@ export type ItemSyncResult = {
   updated: number;
   removed: number;
   deleted: number;
+  months: MonthYear[];
 };
 
 type ItemState = { cursor?: string; startedAt?: Timestamp };
@@ -80,13 +83,22 @@ async function applyPlan(plan: SyncPlan, now: Date): Promise<void> {
 
 async function syncItem(item: PlaidItem): Promise<ItemSyncResult> {
   const now = new Date();
-  const result = { institution: item.institution, skipped: false, created: 0, updated: 0, removed: 0, deleted: 0 };
+  const result: ItemSyncResult = {
+    institution: item.institution,
+    skipped: false,
+    created: 0,
+    updated: 0,
+    removed: 0,
+    deleted: 0,
+    months: [],
+  };
   const claimed = await claim(item, now);
   if (!claimed) return { ...result, skipped: true };
 
   try {
     const { delta, nextCursor } = await syncTransactions(item, claimed.cursor);
-    const plan = planSync(delta, await storedLabels(delta));
+    const stored = await storedLabels(delta);
+    const plan = planSync(delta, stored);
     await applyPlan(plan, now);
     // Cursor moves only after every write lands, so a crash replays the same delta
     await plaidItems.doc(item.itemId).set({ cursor: nextCursor, syncedAt: now }, { merge: true });
@@ -96,6 +108,7 @@ async function syncItem(item: PlaidItem): Promise<ItemSyncResult> {
       updated: plan.updates.length,
       removed: plan.removed.length,
       deleted: plan.deletes.length,
+      months: touchedMonths(plan, stored),
     };
   } catch (error) {
     await plaidItems.doc(item.itemId).update({ startedAt: claimed.previousStart ?? FieldValue.delete() });

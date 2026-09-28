@@ -1,6 +1,7 @@
-import { LINE_ENTRIES_COLLECTION, osStatusOf } from "@myos/shared";
+import { LINE_ENTRIES_COLLECTION, osStatusOf, type MonthYear } from "@myos/shared";
 import { FirestoreRepo, type FirestoreRepoTypeSet } from "../../core/firestore/firestoreRepo.js";
-import type { DomainInner } from "../../core/resourceBuilder/resourceBuilder.types.js";
+import type { DomainInner, WriteChange } from "../../core/resourceBuilder/resourceBuilder.types.js";
+import { regeneratePastReports } from "../../services/monthReports.js";
 import { lineEntryQueryFilterFields, lineEntryQuerySchema } from "./lineEntries.query.js";
 import { lineEntryPatchSchema, lineEntryPostSchema, lineEntryRecordSchema } from "./lineEntries.schemas.js";
 import type { LineEntryEntity, LineEntryPatch, LineEntryPost, LineEntryQuery, LineEntryRecord } from "./lineEntries.types.js";
@@ -26,6 +27,10 @@ export function buildLineEntryPatchRecord(patch: LineEntryPatch): LineEntryPatch
   return { ...patch, ...(osStatus ? { osStatus } : {}), updatedAt: new Date() };
 }
 
+function changedMonths({ before, after }: WriteChange): MonthYear[] {
+  return [before, after].flatMap((entry) => (entry ? [(entry as LineEntryEntity).monthYear] : []));
+}
+
 export const lineEntryDomain: DomainInner = {
   resourceName: "lineEntry",
   repo: lineEntryRepo,
@@ -38,4 +43,7 @@ export const lineEntryDomain: DomainInner = {
   createId: (input) => (input as LineEntryPost).id,
   buildCreateRecord: (input) => buildLineEntryCreateRecord(input as LineEntryPost),
   buildPatchRecord: (_existing, patch) => buildLineEntryPatchRecord(patch as LineEntryPatch),
+  afterWrite: async (change) => {
+    await regeneratePastReports(changedMonths(change));
+  },
 };

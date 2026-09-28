@@ -8,14 +8,17 @@ export type ItemSyncResult = {
   updated: number;
   removed: number;
   deleted: number;
+  months: MonthYear[];
 };
+
+export type LedgerRefresh = { items: ItemSyncResult[]; reports: MonthYear[] };
 
 export async function fetchLineEntries(monthYear: MonthYear): Promise<LineEntry[]> {
   return unwrap<LineEntry[]>(await fetch(`/api/transactions/${monthYear}`));
 }
 
-export async function syncTransactions(): Promise<ItemSyncResult[]> {
-  return unwrap<ItemSyncResult[]>(await fetch("/api/transactions/syncs", { method: "POST" }));
+export async function syncTransactions(): Promise<LedgerRefresh> {
+  return unwrap<LedgerRefresh>(await fetch("/api/transactions/syncs", { method: "POST" }));
 }
 
 export async function saveLabel(entry: LineEntryView, label: string): Promise<LineEntry> {

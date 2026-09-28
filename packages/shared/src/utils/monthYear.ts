@@ -29,3 +29,10 @@ export function formatMonthYear(monthYear: MonthYear): string {
   const [year, month] = monthYear.split("-").map(Number) as [number, number];
   return new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
+
+/** Every month from `first` to `last`, both included; empty when `first` is later. */
+export function monthRange(first: MonthYear, last: MonthYear): MonthYear[] {
+  const months: MonthYear[] = [];
+  for (let month = first; month <= last; month = nextMonthYear(month)) months.push(month);
+  return months;
+}

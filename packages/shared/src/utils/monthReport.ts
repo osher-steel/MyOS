@@ -1,4 +1,4 @@
-import type { MonthYear } from "../types/interfaces/common.js";
+import type { FireTimestampLike, MonthYear } from "../types/interfaces/common.js";
 import { BudgetGroup, type Budget, type LineEntryView } from "../types/interfaces/finance.js";
 import { budgetUsage, type GroupUsage } from "./budgetUsage.js";
 import { groupLineEntries, totalLineEntries } from "./lineEntries.js";
@@ -28,6 +28,10 @@ export interface MonthReport {
   groups: GroupUsage[];
   outcome: MonthOutcome | null;
 }
+
+export type StoredMonthReport = MonthReport & { id: string; generatedAt: FireTimestampLike };
+
+export { budgetId as monthReportId } from "./budgetId.js";
 
 /** Credits need no label: every inflow is entry, every outflow is spent. */
 export function monthReport(monthYear: MonthYear, budget: Budget | null, rows: LineEntryView[]): MonthReport {

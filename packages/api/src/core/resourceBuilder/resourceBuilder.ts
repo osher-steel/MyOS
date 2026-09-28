@@ -194,6 +194,7 @@ function buildCreateHandler(inner: DomainInner, flags: EndpointFlags): RequestHa
       const record = parseOrThrow(inner.schemas.record!, final, `${inner.resourceName} record`);
       const id = inner.createId?.(input, { uid: req.uid, client });
       const entity = await inner.repo.create(record, id);
+      await inner.afterWrite?.({ id: entity.id, before: null, after: entity });
       res.status(201).json({ data: entity });
     } catch (error) {
       processError(res, error, `Failed to create ${inner.resourceName}`);
@@ -230,6 +231,7 @@ function buildPatchHandler(inner: DomainInner, flags: EndpointFlags): RequestHan
         final = await inner.buildPatchRecord(existing, patch, client);
       }
       const entity = await inner.repo.patch(id, final as Record<string, unknown>);
+      await inner.afterWrite?.({ id, before: existing, after: entity });
       res.status(200).json({ data: entity });
     } catch (error) {
       processError(res, error, `Failed to patch ${inner.resourceName}`);
@@ -248,7 +250,9 @@ function buildDeleteHandler(inner: DomainInner, flags: EndpointFlags): RequestHa
       if (!client) throw new ServiceForbiddenError("Forbidden");
 
       const id = req.params.id as string;
+      const existing = inner.afterWrite ? await inner.repo.get(id) : null;
       await inner.repo.delete(id);
+      await inner.afterWrite?.({ id, before: existing, after: null });
       res.status(204).send();
     } catch (error) {
       processError(res, error, `Failed to delete ${inner.resourceName}`);
