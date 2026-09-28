@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LineEntryStatus, mergeLineEntries, PlaidTransactionStatus, type LineEntry, type PlaidTransaction } from "@myos/shared";
+import {
+  groupLineEntries,
+  LineEntryStatus,
+  PlaidTransactionStatus,
+  planSync,
+  totalLineEntries,
+  type LineEntry,
+  type PlaidSyncDelta,
+  type PlaidTransaction,
+} from "@myos/shared";
 import { buildLineEntryCreateRecord, buildLineEntryPatchRecord } from "../../../src/domains/lineEntries/lineEntries.domain.js";
 import { lineEntryQuerySchema } from "../../../src/domains/lineEntries/lineEntries.query.js";
 import { lineEntryPatchSchema, lineEntryPostSchema } from "../../../src/domains/lineEntries/lineEntries.schemas.js";
@@ -68,45 +77,74 @@ test("line entry list filters by month and sorts by id by default", () => {
   assert.deepEqual(parsed.monthYear, { eq: "2026-09" });
 });
 
-test("merge keeps stored labels, takes Plaid amount and status, and adds live-only rows", () => {
-  const rows = mergeLineEntries(
-    [stored({ label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: 40, plaidStatus: PlaidTransactionStatus.PENDING })],
-    [live({ amount: 42.5 }), live({ id: "txn_2", name: "Shell", date: "2026-09-05", pending: true })],
-  );
+const delta = (overrides: Partial<PlaidSyncDelta>): PlaidSyncDelta => ({ added: [], modified: [], removed: [], ...overrides });
+const storedMap = (...rows: LineEntry[]) => new Map(rows.map((row) => [row.id, row]));
+
+test("sync creates unlabelled rows for every new transaction, labelled or not", () => {
+  const plan = planSync(delta({ added: [live({}), live({ id: "txn_2", name: "Payroll", amount: -3000 })] }), new Map());
   assert.deepEqual(
-    rows.map((row) => [row.id, row.label, row.amount, row.plaidStatus, row.osStatus]),
+    plan.creates.map((row) => [row.id, row.monthYear, row.osStatus, row.label]),
     [
-      ["txn_2", undefined, 42.5, PlaidTransactionStatus.PENDING, LineEntryStatus.NOT_LABELLED],
-      ["txn_1", "Groceries", 42.5, PlaidTransactionStatus.POSTED, LineEntryStatus.LABELLED],
+      ["txn_1", "2026-09", LineEntryStatus.NOT_LABELLED, undefined],
+      ["txn_2", "2026-09", LineEntryStatus.NOT_LABELLED, undefined],
     ],
   );
-  assert.ok(!("createdAt" in rows[1]!));
+  assert.deepEqual([plan.updates, plan.removed, plan.deletes], [[], [], []]);
 });
 
-test("merge moves a label from the stored pending id to the posted id", () => {
-  const rows = mergeLineEntries(
-    [stored({ id: "pend_1", label: "Fuel", osStatus: LineEntryStatus.LABELLED, plaidStatus: PlaidTransactionStatus.PENDING })],
-    [live({ id: "post_1", pendingTransactionId: "pend_1" })],
+test("sync keeps a manual label when Plaid modifies the transaction", () => {
+  const labelled = stored({ label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: 40 });
+  const plan = planSync(delta({ modified: [live({ amount: 42.5 })] }), storedMap(labelled));
+  assert.equal(plan.creates.length, 0);
+  assert.deepEqual(plan.updates, [
+    {
+      id: "txn_1",
+      name: "Publix",
+      amount: 42.5,
+      date: "2026-09-03",
+      monthYear: "2026-09",
+      currency: "USD",
+      plaidStatus: PlaidTransactionStatus.POSTED,
+    },
+  ]);
+  assert.ok(plan.updates.every((fields) => !("label" in fields) && !("osStatus" in fields)));
+});
+
+test("sync moves a label from the pending row to the posted one and deletes the pending row", () => {
+  const pending = stored({ id: "pend_1", label: "Fuel", osStatus: LineEntryStatus.LABELLED, plaidStatus: PlaidTransactionStatus.PENDING });
+  const plan = planSync(
+    delta({ added: [live({ id: "post_1", pendingTransactionId: "pend_1" })], removed: ["pend_1"] }),
+    storedMap(pending),
   );
-  assert.deepEqual(rows.map((row) => [row.id, row.label, row.pendingTransactionId]), [["post_1", "Fuel", "pend_1"]]);
+  assert.deepEqual(plan.creates.map((row) => [row.id, row.label, row.osStatus, row.pendingTransactionId]), [
+    ["post_1", "Fuel", LineEntryStatus.LABELLED, "pend_1"],
+  ]);
+  assert.deepEqual([plan.deletes, plan.removed], [["pend_1"], []]);
 });
 
-test("merge leaves stored rows alone when Plaid returns nothing", () => {
-  const rows = mergeLineEntries([stored({ label: "Rent", osStatus: LineEntryStatus.LABELLED })], []);
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0]!.label, "Rent");
+test("sync marks stored removals and ignores removals it never stored", () => {
+  const plan = planSync(delta({ removed: ["txn_1", "never_seen"] }), storedMap(stored({})));
+  assert.deepEqual(plan.removed, ["txn_1"]);
 });
 
-test("grouping splits on label and totals count outflows only, per label with sign", async () => {
-  const { groupLineEntries, totalLineEntries } = await import("@myos/shared");
-  const rows = mergeLineEntries(
-    [
-      stored({ id: "a", label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: 40 }),
-      stored({ id: "b", label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: -10 }),
-    ],
-    [live({ id: "c", amount: 25 }), live({ id: "d", name: "Payroll", amount: -3000 })],
-  );
-  const groups = groupLineEntries(rows);
+test("sync applies the latest version of a transaction added and modified in one run", () => {
+  const plan = planSync(delta({ added: [live({ amount: 10, pending: true })], modified: [live({ amount: 12 })] }), new Map());
+  assert.deepEqual(plan.creates.map((row) => [row.amount, row.plaidStatus]), [[12, PlaidTransactionStatus.POSTED]]);
+});
+
+test("sync skips a transaction added and removed in the same run", () => {
+  const plan = planSync(delta({ added: [live({ id: "flash" })], removed: ["flash"] }), new Map());
+  assert.deepEqual([plan.creates, plan.removed], [[], []]);
+});
+
+test("grouping drops removed rows, splits on label, and totals outflows per label with sign", () => {
+  const groups = groupLineEntries([
+    stored({ id: "a", label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: 40 }),
+    stored({ id: "b", label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: -10 }),
+    stored({ id: "c", amount: 25 }),
+    stored({ id: "d", name: "Payroll", amount: -3000 }),
+    stored({ id: "e", amount: 99, plaidStatus: PlaidTransactionStatus.REMOVED }),
+  ]);
   assert.deepEqual(
     [groups.all.length, groups.labelled.length, groups.unlabelled.length],
     [4, 2, 2],

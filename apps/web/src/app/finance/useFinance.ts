@@ -2,39 +2,50 @@
 
 import {
   groupLineEntries,
-  mergeLineEntries,
   monthReport,
   toMonthYear,
   totalLineEntries,
   type LineEntryView,
   type MonthReport,
   type MonthYear,
-  type PlaidTransaction,
 } from "@myos/shared";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchBudget } from "@/lib/budgetsClient";
 import { fetchPastReports } from "@/lib/reportsClient";
-import { fetchLineEntries, fetchPlaidTransactions, saveLabel } from "@/lib/transactionsClient";
+import { fetchLineEntries, saveLabel, syncTransactions } from "@/lib/transactionsClient";
 import useMonthlySource from "./useMonthlySource";
 
 const HISTORY_MONTHS = 6;
 
-const noLiveTransactions = async (): Promise<PlaidTransaction[]> => [];
+type SyncState = { syncing: boolean; error: string | null; version: number };
 
 /**
- * One month's budget, stored line entries and live Plaid transactions, each
- * fetched through the Next proxies in parallel and settling on its own, so a
- * slow or failed Plaid call never blanks the ledger the API already has.
- * Past months are the ledger's alone; only the open month asks Plaid.
+ * The ledger renders straight away while a bank sync runs in the background;
+ * if the sync changed anything, the ledger and history are fetched again.
  */
 export default function useFinance() {
   const [monthYear, setMonthYear] = useState<MonthYear>(() => toMonthYear());
   const isCurrent = monthYear === toMonthYear();
+  const [sync, setSync] = useState<SyncState>({ syncing: true, error: null, version: 0 });
   const budget = useMonthlySource(monthYear, fetchBudget);
-  const stored = useMonthlySource(monthYear, fetchLineEntries);
-  const live = useMonthlySource(monthYear, isCurrent ? fetchPlaidTransactions : noLiveTransactions);
+  const stored = useMonthlySource(monthYear, fetchLineEntries, sync.version);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [past, setPast] = useState<{ reports: MonthReport[]; error: string | null } | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+    syncTransactions()
+      .then((items) => items.some((item) => item.created + item.updated + item.removed + item.deleted > 0))
+      .then((changed) => ({ changed, error: null }))
+      .catch((err: Error) => ({ changed: false, error: err.message }))
+      .then(({ changed, error }) => {
+        if (ignore) return;
+        setSync((prev) => ({ syncing: false, error, version: changed ? prev.version + 1 : prev.version }));
+      });
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -47,12 +58,9 @@ export default function useFinance() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [sync.version]);
 
-  const groups = useMemo(
-    () => groupLineEntries(mergeLineEntries(stored.data ?? [], live.data ?? [])),
-    [stored.data, live.data],
-  );
+  const groups = useMemo(() => groupLineEntries(stored.data ?? []), [stored.data]);
   const totals = useMemo(() => totalLineEntries(groups), [groups]);
   const report = useMemo(() => monthReport(monthYear, budget.data, groups.all), [monthYear, budget.data, groups]);
 
@@ -90,13 +98,14 @@ export default function useFinance() {
       totals,
       budget: budget.data,
       labelEntry,
-      loading: stored.loading || live.loading,
-      errors: { api: stored.error, plaid: live.error, save: saveError },
+      loading: stored.loading,
+      syncing: sync.syncing,
+      errors: { api: stored.error, sync: sync.error, save: saveError },
     },
     report: {
       report,
       inProgress: isCurrent,
-      loading: budget.loading || stored.loading || live.loading,
+      loading: budget.loading || stored.loading,
     },
     history: { reports: history, loading: past === null, error: past?.error ?? null },
   };

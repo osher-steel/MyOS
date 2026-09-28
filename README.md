@@ -40,7 +40,7 @@ pnpm test           # api tests (node:test, no Firestore needed)
 
 | Section | Source | Notes |
 | --- | --- | --- |
-| Money | Plaid | reads every linked bank in `~/.plaid/tokens.json`; link one with `python3 ~/.claude/skills/plaid/link_server.py <bank>`. `PLAID_ENV=sandbox` mints a fake bank instead |
+| Money | Plaid | Finance syncs every transaction into Firestore on load via `POST /line-entries/syncs`; reads every linked bank in `~/.plaid/tokens.json`; link one with `python3 ~/.claude/skills/plaid/link_server.py <bank>`. `PLAID_ENV=sandbox` mints a fake bank instead |
 | News | NewsAPI | US top headlines |
 | Music | Spotify | recently played + top artists, user-scoped via PKCE |
 | Events | Ticketmaster | upcoming Miami events, recurring runs collapsed |

@@ -51,6 +51,7 @@ export default function TransactionsPanel({
   budget,
   labelEntry,
   loading,
+  syncing,
   errors,
 }: {
   groups: LineEntryGroups;
@@ -58,7 +59,8 @@ export default function TransactionsPanel({
   budget: Budget | null;
   labelEntry: (entry: LineEntryView, label: string) => void;
   loading: boolean;
-  errors: { api: string | null; plaid: string | null; save: string | null };
+  syncing: boolean;
+  errors: { api: string | null; sync: string | null; save: string | null };
 }) {
   const [tab, setTab] = useState<Tab>("all");
   const entries = groups[tab];
@@ -66,11 +68,12 @@ export default function TransactionsPanel({
   return (
     <Section label="Transactions" aside={groups.all.length > 0 ? `${money(totals.spent, { cents: true })} spent` : undefined}>
       {errors.api ? <SourceError message={`ledger: ${errors.api}`} /> : null}
-      {errors.plaid ? <SourceError message={`Plaid: ${errors.plaid}`} /> : null}
+      {errors.sync ? <SourceError message={`bank sync: ${errors.sync}`} /> : null}
       {errors.save ? <SourceError message={`label not saved: ${errors.save}`} /> : null}
 
       <p className="entry-meta mb-4">
         {money(totals.spentLabelled, { cents: true })} labelled · {money(totals.spentUnlabelled, { cents: true })} unlabelled
+        {syncing ? " · syncing with bank…" : null}
       </p>
 
       <div role="tablist" className="mb-2 flex gap-6 border-b border-rule">

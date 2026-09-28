@@ -1,9 +1,11 @@
 import {
   LineEntryStatus,
   PlaidTransactionStatus,
-  type LineEntry,
   type LineEntryView,
+  type PlaidOwnedFields,
+  type PlaidSyncDelta,
   type PlaidTransaction,
+  type SyncPlan,
 } from "../types/interfaces/finance.js";
 
 export function plaidStatusOf(tx: Pick<PlaidTransaction, "pending">): PlaidTransactionStatus {
@@ -14,7 +16,7 @@ export function osStatusOf(label: string | undefined): LineEntryStatus {
   return label ? LineEntryStatus.LABELLED : LineEntryStatus.NOT_LABELLED;
 }
 
-export function toLineEntryView(tx: PlaidTransaction): LineEntryView {
+export function plaidOwnedFields(tx: PlaidTransaction): PlaidOwnedFields {
   return {
     id: tx.id,
     name: tx.name,
@@ -24,7 +26,6 @@ export function toLineEntryView(tx: PlaidTransaction): LineEntryView {
     currency: tx.currency,
     ...(tx.pendingTransactionId ? { pendingTransactionId: tx.pendingTransactionId } : {}),
     plaidStatus: plaidStatusOf(tx),
-    osStatus: LineEntryStatus.NOT_LABELLED,
   };
 }
 
@@ -32,33 +33,39 @@ export function byDateDesc(a: LineEntryView, b: LineEntryView): number {
   return b.date.localeCompare(a.date) || a.name.localeCompare(b.name);
 }
 
+type StoredLabel = Pick<LineEntryView, "id" | "label" | "osStatus">;
+
 /**
- * Stored entries own the label; Plaid owns amount and status. When Plaid has
- * posted a transaction we only stored as pending, the label follows it to the
- * new id and the pending row disappears.
+ * Updates carry only Plaid-owned fields, so a sync can never overwrite a label.
+ * A posted transaction replacing a stored pending one inherits its label, and
+ * the pending row is deleted rather than marked removed.
  */
-export function mergeLineEntries(
-  stored: Array<LineEntry | LineEntryView>,
-  live: PlaidTransaction[],
-): LineEntryView[] {
-  const rows = new Map<string, LineEntryView>();
-  for (const { createdAt: _c, updatedAt: _u, ...view } of stored as LineEntry[]) {
-    rows.set(view.id, view);
+export function planSync(delta: PlaidSyncDelta, stored: ReadonlyMap<string, StoredLabel>): SyncPlan {
+  const removed = new Set(delta.removed);
+  const latest = new Map<string, PlaidTransaction>();
+  for (const tx of [...delta.added, ...delta.modified]) {
+    if (!removed.has(tx.id)) latest.set(tx.id, tx);
   }
 
-  for (const tx of live) {
-    const settled = tx.pendingTransactionId ? rows.get(tx.pendingTransactionId) : undefined;
-    if (settled) rows.delete(settled.id);
-
-    const known = rows.get(tx.id) ?? settled;
-    const fresh = toLineEntryView(tx);
-    rows.set(
-      tx.id,
-      known?.label ? { ...fresh, label: known.label, osStatus: known.osStatus } : fresh,
+  const plan: SyncPlan = { creates: [], updates: [], removed: [], deletes: [] };
+  for (const tx of latest.values()) {
+    const fields = plaidOwnedFields(tx);
+    if (stored.has(tx.id)) {
+      plan.updates.push(fields);
+      continue;
+    }
+    const settled = tx.pendingTransactionId ? stored.get(tx.pendingTransactionId) : undefined;
+    if (settled) plan.deletes.push(settled.id);
+    plan.creates.push(
+      settled?.label
+        ? { ...fields, label: settled.label, osStatus: settled.osStatus }
+        : { ...fields, osStatus: LineEntryStatus.NOT_LABELLED },
     );
   }
 
-  return [...rows.values()].sort(byDateDesc);
+  const deleted = new Set(plan.deletes);
+  plan.removed = delta.removed.filter((id) => stored.has(id) && !deleted.has(id));
+  return plan;
 }
 
 export type LineEntryGroups = {
@@ -77,10 +84,11 @@ export type LineEntryTotals = {
 const outflow = (rows: LineEntryView[]) => rows.reduce((sum, row) => sum + Math.max(row.amount, 0), 0);
 
 export function groupLineEntries(rows: LineEntryView[]): LineEntryGroups {
+  const all = rows.filter((row) => row.plaidStatus !== PlaidTransactionStatus.REMOVED).sort(byDateDesc);
   return {
-    all: rows,
-    labelled: rows.filter((row) => row.label !== undefined),
-    unlabelled: rows.filter((row) => row.label === undefined),
+    all,
+    labelled: all.filter((row) => row.label !== undefined),
+    unlabelled: all.filter((row) => row.label === undefined),
   };
 }
 

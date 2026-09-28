@@ -33,7 +33,7 @@ export interface MonthReport {
 export function monthReport(monthYear: MonthYear, budget: Budget | null, rows: LineEntryView[]): MonthReport {
   const groups = groupLineEntries(rows);
   const totals = totalLineEntries(groups);
-  const entry = rows.reduce((total, row) => total + Math.max(-row.amount, 0), 0);
+  const entry = groups.all.reduce((total, row) => total + Math.max(-row.amount, 0), 0);
   const base = {
     monthYear,
     entry,

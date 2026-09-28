@@ -56,3 +56,10 @@ export class ServiceMissingIndexError extends AppError {
     this.name = "ServiceMissingIndexError";
   }
 }
+
+export class ServiceUpstreamError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super(message, 502, "upstream_error", details);
+    this.name = "ServiceUpstreamError";
+  }
+}

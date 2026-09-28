@@ -1,7 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import type { MonthYear, PlaidTransaction } from "@myos/shared";
 import { env } from "./env";
 
 /**
@@ -160,56 +159,4 @@ export async function getTransactions(limit = 8): Promise<Transaction[]> {
       date: tx.date,
       currency: tx.iso_currency_code ?? "USD",
     }));
-}
-
-type PlaidTransactionRow = {
-  transaction_id: string;
-  pending_transaction_id: string | null;
-  name: string;
-  amount: number;
-  date: string;
-  iso_currency_code: string | null;
-  pending: boolean;
-};
-
-type TransactionsPage = { transactions: PlaidTransactionRow[]; total_transactions: number };
-
-const PAGE_SIZE = 500;
-
-function monthBounds(monthYear: MonthYear): { start_date: string; end_date: string } {
-  const [year, month] = monthYear.split("-").map(Number) as [number, number];
-  const lastDay = new Date(year, month, 0).getDate();
-  return { start_date: `${monthYear}-01`, end_date: `${monthYear}-${String(lastDay).padStart(2, "0")}` };
-}
-
-async function itemTransactionsInMonth(accessToken: string, monthYear: MonthYear): Promise<PlaidTransactionRow[]> {
-  const bounds = monthBounds(monthYear);
-  const rows: PlaidTransactionRow[] = [];
-  let total = Infinity;
-  while (rows.length < total) {
-    const page = await plaid<TransactionsPage>("/transactions/get", {
-      access_token: accessToken,
-      ...bounds,
-      options: { count: PAGE_SIZE, offset: rows.length },
-    });
-    rows.push(...page.transactions);
-    total = page.total_transactions;
-    if (page.transactions.length === 0) break;
-  }
-  return rows;
-}
-
-export async function getTransactionsInMonth(monthYear: MonthYear): Promise<PlaidTransaction[]> {
-  const items = await linkedItems();
-  const perItem = await Promise.all(items.map(([, item]) => itemTransactionsInMonth(item.access_token, monthYear)));
-
-  return perItem.flat().map((tx) => ({
-    id: tx.transaction_id,
-    name: tx.name,
-    amount: tx.amount,
-    date: tx.date,
-    currency: tx.iso_currency_code ?? "USD",
-    pending: tx.pending,
-    ...(tx.pending_transaction_id ? { pendingTransactionId: tx.pending_transaction_id } : {}),
-  }));
 }

@@ -3,6 +3,7 @@ import { defineResource } from "../core/resourceBuilder/resourceBuilder.js";
 import { budgetDomain } from "../domains/budgets/budgets.domain.js";
 import { firestoreIndexDomain } from "../domains/firestoreIndexes/firestoreIndexes.domain.js";
 import { lineEntryDomain } from "../domains/lineEntries/lineEntries.domain.js";
+import { syncLinkedItems } from "../services/plaidSync.js";
 
 export const router = Router();
 
@@ -37,8 +38,8 @@ const budget = defineResource({
 });
 
 // ── Line entries ──────────────────────────────────────────
-// One document per Plaid transaction, id = Plaid transaction_id, so a re-sync
-// of the same transaction is a 409, not a duplicate.
+// One document per Plaid transaction, id = Plaid transaction_id. POST /syncs
+// pulls every change since the stored cursor; manual labels survive it.
 
 const lineEntry = defineResource({
   inner: lineEntryDomain,
@@ -48,6 +49,14 @@ const lineEntry = defineResource({
     create: { permission: "owner" },
     patch: { permission: "owner" },
     delete: { permission: "owner" },
+  },
+  actions: {
+    sync: {
+      method: "post",
+      path: "/syncs",
+      permission: "owner",
+      run: async () => ({ body: { data: await syncLinkedItems() } }),
+    },
   },
 });
 

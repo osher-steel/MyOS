@@ -61,3 +61,21 @@ export interface PlaidTransaction {
   pending: boolean;
   pendingTransactionId?: string;
 }
+
+export interface PlaidSyncDelta {
+  added: PlaidTransaction[];
+  modified: PlaidTransaction[];
+  removed: string[];
+}
+
+export type PlaidOwnedFields = Pick<
+  LineEntryView,
+  "id" | "name" | "amount" | "date" | "monthYear" | "currency" | "pendingTransactionId" | "plaidStatus"
+>;
+
+export interface SyncPlan {
+  creates: LineEntryView[];
+  updates: PlaidOwnedFields[];
+  removed: string[];
+  deletes: string[];
+}

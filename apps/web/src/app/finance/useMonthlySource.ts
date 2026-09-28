@@ -10,7 +10,11 @@ type Loaded<T> = { monthYear: MonthYear; data: T | null; error: string | null };
  * "the loaded month is not the selected month" — no state writes are needed
  * when the selection changes, only when a fetch settles.
  */
-export default function useMonthlySource<T>(monthYear: MonthYear, fetcher: (monthYear: MonthYear) => Promise<T>) {
+export default function useMonthlySource<T>(
+  monthYear: MonthYear,
+  fetcher: (monthYear: MonthYear) => Promise<T>,
+  refreshKey = 0,
+) {
   const [loaded, setLoaded] = useState<Loaded<T> | null>(null);
 
   useEffect(() => {
@@ -26,7 +30,7 @@ export default function useMonthlySource<T>(monthYear: MonthYear, fetcher: (mont
     return () => {
       ignore = true;
     };
-  }, [monthYear, fetcher]);
+  }, [monthYear, fetcher, refreshKey]);
 
   const update = useCallback(
     (updater: (data: T) => T) =>
