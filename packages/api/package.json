@@ -14,7 +14,8 @@
     "lint": "eslint",
     "test": "node --import tsx --test $(find tests -name '*.test.ts' -print)",
     "clean": "rm -rf dist",
-    "daily": "node --env-file=../../.env --import tsx scripts/daily.ts"
+    "daily": "node --env-file=../../.env --import tsx scripts/daily.ts",
+    "deploy:daily": "node scripts/deploy-functions.mjs"
   },
   "dependencies": {
     "cors": "^2.8.6",
@@ -31,6 +32,7 @@
     "@types/node": "^20.19.0",
     "eslint": "^9.39.0",
     "eslint-plugin-import-x": "^4.17.1",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.62.1"

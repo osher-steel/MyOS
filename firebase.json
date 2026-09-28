@@ -1,0 +1,9 @@
+{
+  "functions": [
+    {
+      "source": "packages/api/deploy",
+      "codebase": "default",
+      "runtime": "nodejs22"
+    }
+  ]
+}

@@ -37,10 +37,14 @@ pnpm test           # api tests (node:test, no Firestore needed)
 pnpm api daily      # sync Plaid and regenerate month reports once
 ```
 
-`packages/api/scripts/install-daily.sh` installs a launchd agent that runs
-`pnpm api daily` every day at 06:00 (a missed run fires on wake). It pins the
-current `node` path, so rerun it after switching Node versions. Logs go to
-`~/Library/Logs/myos-daily.log`; remove it with
+`pnpm api deploy:daily` bundles the API and deploys only the `dailyRefresh`
+scheduled function to Firebase (06:00 America/New_York). It writes the
+function's env, including the Plaid tokens from `~/.plaid/tokens.json`, into
+the gitignored `packages/api/deploy/.env`, so redeploy after linking a bank.
+The HTTP API is not deployed.
+
+`packages/api/scripts/install-daily.sh` installs the same run as a local
+launchd agent instead. Remove it with
 `launchctl bootout gui/$(id -u)/com.myos.daily`.
 
 ## Data sources (web)

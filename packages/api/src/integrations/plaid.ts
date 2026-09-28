@@ -34,13 +34,19 @@ const plaidEnv = () => process.env.PLAID_ENV ?? "production";
 // Tokens are minted by the plaid skill's Link flow and shared with it.
 const tokensFile = () => process.env.PLAID_TOKENS_FILE ?? join(homedir(), ".plaid", "tokens.json");
 
-export function linkedItems(): PlaidItem[] {
-  let items: Record<string, StoredItem>;
+function storedItems(): Record<string, StoredItem> {
+  // Deployed functions get the token store as env, since there is no file to read
+  const encoded = process.env.PLAID_ITEMS_B64;
   try {
-    items = (JSON.parse(readFileSync(tokensFile(), "utf8")) as { items?: Record<string, StoredItem> }).items ?? {};
+    const raw = encoded ? Buffer.from(encoded, "base64").toString("utf8") : readFileSync(tokensFile(), "utf8");
+    return (JSON.parse(raw) as { items?: Record<string, StoredItem> }).items ?? {};
   } catch {
-    items = {};
+    return {};
   }
+}
+
+export function linkedItems(): PlaidItem[] {
+  const items = storedItems();
 
   return Object.entries(items)
     .filter(([, item]) => item.access_token && (item.env ?? "production") === plaidEnv())

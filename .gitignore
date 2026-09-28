@@ -10,3 +10,5 @@ dist/
 *.tsbuildinfo
 .spotify_tokens.json
 .DS_Store
+packages/api/deploy/
+firebase-debug.log
