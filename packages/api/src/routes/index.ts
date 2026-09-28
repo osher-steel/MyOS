@@ -1,9 +1,17 @@
+import { toMonthYear } from "@myos/shared";
 import { Router } from "express";
 import { z } from "zod";
 import { defineResource } from "../core/resourceBuilder/resourceBuilder.js";
 import { budgetDomain } from "../domains/budgets/budgets.domain.js";
 import { monthYearSchema } from "../domains/budgets/budgets.schemas.js";
 import { firestoreIndexDomain } from "../domains/firestoreIndexes/firestoreIndexes.domain.js";
+import {
+  afterGoalAllocationWrite,
+  assertReversible,
+  goalAllocationDomain,
+} from "../domains/goalAllocations/goalAllocations.domain.js";
+import type { GoalAllocationEntity } from "../domains/goalAllocations/goalAllocations.types.js";
+import { goalDomain } from "../domains/goals/goals.domain.js";
 import { lineEntryDomain } from "../domains/lineEntries/lineEntries.domain.js";
 import { monthReportDomain } from "../domains/monthReports/monthReports.domain.js";
 import { refreshLedger } from "../services/ledgerRefresh.js";
@@ -80,11 +88,53 @@ const monthReport = defineResource({
       method: "post",
       path: "/generations",
       permission: "owner",
-      inputSchema: z.object({ monthYear: monthYearSchema }).strict(),
+      inputSchema: z
+        .object({
+          monthYear: monthYearSchema.refine((month) => month < toMonthYear(), "Only finished months have a report."),
+        })
+        .strict(),
       run: async ({ input }) => ({
         status: 201,
         body: { data: await generateMonthReport((input as { monthYear: string }).monthYear) },
       }),
+    },
+  },
+});
+
+// ── Goals ─────────────────────────────────────────────────
+// A goal is a savings category that outlives the month. amountSaved is the
+// sum of its allocations: month savings (written by report generation), plus
+// deficit covers and manual moves. Allocations are a ledger: no patch, and
+// only covers and manual moves can be deleted.
+
+const goal = defineResource({
+  inner: goalDomain,
+  endpoints: {
+    get: { permission: "owner" },
+    list: { permission: "owner" },
+    create: { permission: "owner" },
+    patch: { permission: "owner" },
+  },
+});
+
+const goalAllocation = defineResource({
+  inner: goalAllocationDomain,
+  endpoints: {
+    get: { permission: "owner" },
+    list: { permission: "owner" },
+    create: { permission: "owner" },
+  },
+  actions: {
+    reverse: {
+      method: "delete",
+      path: "/:id",
+      permission: "owner",
+      rules: (existing) => assertReversible(existing as GoalAllocationEntity),
+      run: async ({ params, existing, repo }) => {
+        await repo.delete(params.id!);
+        await afterGoalAllocationWrite({ id: params.id!, before: existing, after: null });
+        return { status: 204, body: undefined };
+      },
     },
   },
 });
@@ -94,5 +144,7 @@ const monthReport = defineResource({
 
 router.use("/budgets", budget.router);
 router.use("/firestore-index-requests", firestoreIndex.router);
+router.use("/goal-allocations", goalAllocation.router);
+router.use("/goals", goal.router);
 router.use("/line-entries", lineEntry.router);
 router.use("/month-reports", monthReport.router);

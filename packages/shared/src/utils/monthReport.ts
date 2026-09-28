@@ -29,7 +29,7 @@ export interface MonthReport {
   outcome: MonthOutcome | null;
 }
 
-export type StoredMonthReport = MonthReport & { id: string; generatedAt: FireTimestampLike };
+export type StoredMonthReport = MonthReport & { id: string; generatedAt: FireTimestampLike; deficitCovered: number };
 
 export { budgetId as monthReportId } from "./budgetId.js";
 

@@ -22,8 +22,15 @@ for a single-user app.
 > `monthReports` doc, backfilled when missing and regenerated whenever a sync
 > or a line-entry write touches that month (the builder's `afterWrite` hook).
 >
-> Next: goals (the deficit question below is still open), then the Finance
-> home with Reports / Allocation / Budget tabs. Phase 2 (music) has not started. Where this document said the
+> Goals are savings categories that outlive the month, matched by name and
+> created on first use. Generating a month's report replaces that month's
+> `month_savings` allocations; a deficit beyond the month's savings is left
+> uncovered on the report and covered by hand with a `deficit_cover`
+> allocation from a goal of your choice. Money is integer cents everywhere.
+>
+> Next: the Finance home (goals, balance, latest report) with Reports /
+> Allocation / Budget tabs, and moving the daily run to a Firebase scheduled
+> function once the Plaid tokens leave the local file. Phase 2 (music) has not started. Where this document said the
 > server would live inside `apps/web/src/server`, read `packages/api/src`
 > instead — the API is its own package, exactly like the monorepo, and the
 > web app calls it over HTTP with `RequestBuilder` from `@myos/shared`.
@@ -242,9 +249,7 @@ context read through the same REST resources the UI uses.
    TypeScript enum. Validate transaction `category` against the active budget's
    categories at write time.
 
-### Open question
+### Deficits (decided 2026-09-27)
 
-When a month closes at a **deficit**, does the allocator draw from the
-lowest-priority bucket first until it is empty, or proportionally across all
-buckets? This is the only branch in the design not determined by what is already
-decided, and it changes `surplusAllocator` in Phase 5.
+A deficit larger than the month's savings is never drawn automatically. The
+report shows it as uncovered and the owner chooses which goals cover it.

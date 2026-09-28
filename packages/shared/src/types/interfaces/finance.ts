@@ -77,3 +77,28 @@ export interface SyncPlan {
   removed: string[];
   deletes: string[];
 }
+
+export interface Goal {
+  id: string;
+  name: string; // matches a savings category name in monthly budgets
+  targetAmount?: number; // cents
+  amountSaved: number; // cents, sum of this goal's allocations
+  createdAt: FireTimestampLike;
+  updatedAt: FireTimestampLike;
+}
+
+export enum GoalAllocationReason {
+  MONTH_SAVINGS = "month_savings",
+  DEFICIT_COVER = "deficit_cover",
+  MANUAL = "manual",
+}
+
+export interface GoalAllocation {
+  id: string;
+  goalId: string;
+  monthYear: MonthYear;
+  amount: number; // cents, negative draws from the goal
+  reason: GoalAllocationReason;
+  note?: string;
+  createdAt: FireTimestampLike;
+}
