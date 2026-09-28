@@ -9,6 +9,6 @@ export type GoalPatch = z.infer<typeof goalPatchSchema>;
 export type GoalRecord = z.infer<typeof goalRecordSchema>;
 export type GoalQuery = z.infer<typeof goalQuerySchema>;
 
-export type GoalEntity = Override<Goal, { createdAt: Date; updatedAt: Date }>;
+export type GoalEntity = Override<Goal, { completedAt?: Date; createdAt: Date; updatedAt: Date }>;
 
 type _AssertGoalRecordSchemaMatchesRecord = Expect<Equal<GoalRecord, RecordOf<GoalEntity>>>;

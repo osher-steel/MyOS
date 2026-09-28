@@ -1,3 +1,4 @@
+import { GoalStatus } from "@myos/shared";
 import z from "zod";
 
 const cents = z.number().int("Amounts are whole cents.");
@@ -15,6 +16,8 @@ export const goalRecordSchema = z
     name,
     targetAmount: cents.min(1).optional(),
     amountSaved: cents,
+    status: z.enum(GoalStatus),
+    completedAt: z.date().optional(),
     createdAt: z.date(),
     updatedAt: z.date(),
   })

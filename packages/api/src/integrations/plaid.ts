@@ -123,3 +123,20 @@ export async function syncTransactions(
     }
   }
 }
+
+type AccountsResponse = {
+  accounts: Array<{ type: string; subtype: string | null; balances: { current: number | null } }>;
+};
+
+const LIQUID_SUBTYPES = new Set(["checking", "savings"]);
+
+/** Cached balances from /accounts/get; /accounts/balance/get is billed per call. */
+export async function liquidBalance(items: PlaidItem[]): Promise<number> {
+  const responses = await Promise.all(
+    items.map((item) => plaid<AccountsResponse>("/accounts/get", { access_token: item.accessToken })),
+  );
+  return responses
+    .flatMap((response) => response.accounts)
+    .filter((account) => account.type === "depository" && LIQUID_SUBTYPES.has(account.subtype ?? ""))
+    .reduce((sum, account) => sum + toCents(account.balances.current ?? 0), 0);
+}

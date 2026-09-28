@@ -22,11 +22,15 @@ for a single-user app.
 > `monthReports` doc, backfilled when missing and regenerated whenever a sync
 > or a line-entry write touches that month (the builder's `afterWrite` hook).
 >
-> Goals are savings categories that outlive the month, matched by name and
-> created on first use. Generating a month's report replaces that month's
-> `month_savings` allocations; a deficit beyond the month's savings is left
-> uncovered on the report and covered by hand with a `deficit_cover`
-> allocation from a goal of your choice. Money is integer cents everywhere.
+> Savings is the parent: an opening amount (linked checking + savings minus
+> the start month's total allocation, recorded by the daily run once the
+> start month begins) plus each finished month's budget-based savings result.
+> Goals are buckets inside it. Month results are assigned to goals by hand;
+> a month stays pending until its assignments add up to its result.
+> Transfers between goals can be dated to any month and never touch month
+> reports. Transactions labelled with a goal draw from it (`goal_spend`),
+> stay out of needs/wants, and still show in the month report. Completing a
+> goal releases what is left back to unassigned savings.
 >
 > Next: the Finance home (goals, balance, latest report) with Reports /
 > Allocation / Budget tabs, and moving the daily run to a Firebase scheduled
@@ -251,5 +255,5 @@ context read through the same REST resources the UI uses.
 
 ### Deficits (decided 2026-09-27)
 
-A deficit larger than the month's savings is never drawn automatically. The
-report shows it as uncovered and the owner chooses which goals cover it.
+Nothing is drawn from goals automatically. An overspent month has a negative
+savings result, and the owner assigns it against the goals they choose.

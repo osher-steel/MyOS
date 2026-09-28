@@ -5,6 +5,7 @@ const goalAllocationQuery = defineListQuery([
   { key: "goalId", type: "stringFilter" },
   { key: "monthYear", type: "stringFilter" },
   { key: "reason", type: "stringFilter" },
+  { key: "transferId", type: "stringFilter" },
   { key: "createdAt", type: "date", sortable: true },
 ] as const);
 

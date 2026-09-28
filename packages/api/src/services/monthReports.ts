@@ -15,7 +15,6 @@ import { db } from "../config/firebase.js";
 import { ServiceNotFoundError } from "../core/errors/errors.js";
 import { budgetRepo, budgetUserId } from "../domains/budgets/budgets.domain.js";
 import type { MonthReportEntity } from "../domains/monthReports/monthReports.types.js";
-import { allocateMonthSavings, deficitCoveredIn } from "./goals.js";
 
 const MAX_BACKFILL_MONTHS = 24;
 
@@ -39,9 +38,7 @@ export async function generateMonthReport(monthYear: MonthYear): Promise<MonthRe
   ]);
   const rows = snapshot.docs.map((doc) => ({ ...(doc.data() as LineEntryView), id: doc.id }));
 
-  const report = monthReport(monthYear, budget, rows);
-  await allocateMonthSavings(monthYear, report);
-  const record = { ...report, deficitCovered: await deficitCoveredIn(monthYear), generatedAt: new Date() };
+  const record = { ...monthReport(monthYear, budget, rows), generatedAt: new Date() };
   const id = monthReportId(ownerUid, monthYear);
   await reports.doc(id).set(record);
   return { ...record, id };

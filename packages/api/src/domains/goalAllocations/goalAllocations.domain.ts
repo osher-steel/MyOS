@@ -1,18 +1,17 @@
 import {
-  deficitCoverErrors,
+  assignmentErrors,
   GOAL_ALLOCATIONS_COLLECTION,
   GoalAllocationReason,
   monthReportId,
-  uncoveredDeficit,
+  toMonthYear,
 } from "@myos/shared";
-import { ServiceNotFoundError, ServiceValidationError } from "../../core/errors/errors.js";
+import { ServiceNotFoundError } from "../../core/errors/errors.js";
 import { FirestoreRepo, type FirestoreRepoTypeSet } from "../../core/firestore/firestoreRepo.js";
 import type { DomainInner, WriteChange } from "../../core/resourceBuilder/resourceBuilder.types.js";
-import { recomputeGoalBalances } from "../../services/goals.js";
-import { regeneratePastReports } from "../../services/monthReports.js";
+import { assignedIn, deleteTransfer, recomputeGoalBalances } from "../../services/goals.js";
+import { loadSavingsState, loadSavingsSummary } from "../../services/savings.js";
 import { budgetUserId } from "../budgets/budgets.domain.js";
-import { goalRepo } from "../goals/goals.domain.js";
-import type { GoalEntity } from "../goals/goals.types.js";
+import { activeGoal, goalRulesError } from "../goals/goals.domain.js";
 import { monthReportRepo } from "../monthReports/monthReports.domain.js";
 import type { MonthReportEntity } from "../monthReports/monthReports.types.js";
 import { goalAllocationQueryFilterFields, goalAllocationQuerySchema } from "./goalAllocations.query.js";
@@ -28,59 +27,53 @@ export const goalAllocationRepo = new FirestoreRepo<
   FirestoreRepoTypeSet<GoalAllocationEntity, GoalAllocationRecord, GoalAllocationQuery, GoalAllocationRecord>
 >(GOAL_ALLOCATIONS_COLLECTION, goalAllocationQueryFilterFields);
 
-function rulesError(formErrors: string[]): ServiceValidationError {
-  return new ServiceValidationError("Invalid goal allocation.", { formErrors, fieldErrors: {} });
-}
-
-async function getOr<T>(load: () => Promise<unknown>, missing: string): Promise<T> {
+async function monthRemaining(monthYear: string): Promise<number> {
+  const state = await loadSavingsState();
+  if (!state) throw goalRulesError(["Savings tracking hasn't started yet."]);
+  if (monthYear < state.startMonth) throw goalRulesError([`Savings tracking starts in ${state.startMonth}, so ${monthYear} isn't counted.`]);
+  if (monthYear >= toMonthYear()) throw goalRulesError([`${monthYear} isn't finished yet.`]);
+  let report: MonthReportEntity;
   try {
-    return (await load()) as T;
+    report = await monthReportRepo.get(monthReportId(budgetUserId(), monthYear));
   } catch (error) {
-    if (error instanceof ServiceNotFoundError) throw rulesError([missing]);
+    if (error instanceof ServiceNotFoundError) throw goalRulesError([`${monthYear} has no report yet.`]);
     throw error;
   }
+  return report.savingsResult - (await assignedIn(monthYear));
 }
 
-export async function buildGoalAllocationCreateRecord(input: GoalAllocationPost): Promise<GoalAllocationRecord> {
-  const goal = await getOr<GoalEntity>(() => goalRepo.get(input.goalId), "Unknown goal.");
-
-  if (input.reason === GoalAllocationReason.MANUAL && goal.amountSaved + input.amount < 0) {
-    throw rulesError([`${goal.name} can't go below zero.`]);
-  }
-
-  if (input.reason === GoalAllocationReason.DEFICIT_COVER) {
-    const report = await getOr<MonthReportEntity>(
-      () => monthReportRepo.get(monthReportId(budgetUserId(), input.monthYear)),
-      `${input.monthYear} has no finished report to cover.`,
-    );
-    const errors = deficitCoverErrors({
-      monthYear: input.monthYear,
-      amount: input.amount,
-      goalSaved: goal.amountSaved,
-      uncovered: uncoveredDeficit(report, report.deficitCovered),
-    });
-    if (errors.length > 0) throw rulesError(errors);
-  }
-
-  return { ...input, createdAt: new Date() };
+export async function buildAssignmentRecord(input: GoalAllocationPost): Promise<GoalAllocationRecord> {
+  const goal = await activeGoal(input.goalId);
+  const errors = assignmentErrors({
+    amount: input.amount,
+    goalName: goal.name,
+    goalBalance: goal.amountSaved,
+    monthRemaining: input.monthYear ? await monthRemaining(input.monthYear) : undefined,
+    unassigned: input.monthYear ? 0 : (await loadSavingsSummary()).unassigned,
+  });
+  if (errors.length > 0) throw goalRulesError(errors);
+  return { ...input, reason: GoalAllocationReason.ASSIGNMENT, createdAt: new Date() };
 }
 
-export function assertReversible(allocation: GoalAllocationEntity): void {
-  if (allocation.reason === GoalAllocationReason.MONTH_SAVINGS) {
-    throw rulesError(["Month savings follow the month's report; change the month's transactions instead."]);
+/** Assignments and transfers can be undone; goal spends follow their transaction and releases their goal. */
+export async function reverseAllocation(allocation: GoalAllocationEntity): Promise<void> {
+  if (allocation.reason === GoalAllocationReason.TRANSFER && allocation.transferId) {
+    await deleteTransfer(allocation.transferId);
+    return;
   }
-}
-
-export async function afterGoalAllocationWrite({ before, after }: WriteChange): Promise<void> {
-  const allocation = (after ?? before) as GoalAllocationEntity;
+  if (allocation.reason !== GoalAllocationReason.ASSIGNMENT) {
+    throw goalRulesError(["Only assignments and transfers can be undone."]);
+  }
+  await goalAllocationRepo.delete(allocation.id);
   await recomputeGoalBalances([allocation.goalId]);
-  if (allocation.reason === GoalAllocationReason.DEFICIT_COVER) await regeneratePastReports([allocation.monthYear]);
 }
 
 export const goalAllocationDomain: DomainInner = {
   resourceName: "goalAllocation",
   repo: goalAllocationRepo,
   schemas: { query: goalAllocationQuerySchema, create: goalAllocationPostSchema, record: goalAllocationRecordSchema },
-  buildCreateRecord: (input) => buildGoalAllocationCreateRecord(input as GoalAllocationPost),
-  afterWrite: afterGoalAllocationWrite,
+  buildCreateRecord: (input) => buildAssignmentRecord(input as GoalAllocationPost),
+  afterWrite: async ({ after, before }: WriteChange) => {
+    await recomputeGoalBalances([((after ?? before) as GoalAllocationEntity).goalId]);
+  },
 };

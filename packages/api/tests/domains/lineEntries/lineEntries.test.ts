@@ -163,5 +163,41 @@ test("grouping drops removed rows, splits on label, and totals outflows per labe
     [4, 2, 2],
   );
   const totals = totalLineEntries(groups);
-  assert.deepEqual(totals, { spent: 6500, spentLabelled: 4000, spentUnlabelled: 2500, usedByLabel: { Groceries: 3000 } });
+  assert.deepEqual(totals, {
+    spent: 6500,
+    spentLabelled: 4000,
+    spentUnlabelled: 2500,
+    spentFromGoals: 0,
+    usedByLabel: { Groceries: 3000 },
+  });
+});
+
+test("goal-paid rows leave the budget groups but still count as money out", () => {
+  const groups = groupLineEntries([
+    stored({ id: "a", label: "Groceries", osStatus: LineEntryStatus.LABELLED, amount: 4000 }),
+    stored({ id: "car", goalId: "g_car", osStatus: LineEntryStatus.LABELLED, amount: 1500000 }),
+  ]);
+  assert.deepEqual([groups.labelled.length, groups.unlabelled.length, groups.fromGoals.length], [1, 0, 1]);
+  const totals = totalLineEntries(groups);
+  assert.deepEqual([totals.spent, totals.spentUnlabelled, totals.spentFromGoals], [1504000, 0, 1500000]);
+});
+
+test("sync carries a goal from the pending row to the posted one", () => {
+  const pending = stored({ id: "pend_1", goalId: "g_car", osStatus: LineEntryStatus.LABELLED });
+  const plan = planSync(
+    delta({ added: [live({ id: "post_1", pendingTransactionId: "pend_1" })], removed: ["pend_1"] }),
+    storedMap(pending),
+  );
+  assert.deepEqual(plan.creates.map((row) => [row.id, row.goalId, row.label, row.osStatus]), [
+    ["post_1", "g_car", undefined, LineEntryStatus.LABELLED],
+  ]);
+});
+
+test("labelling with a goal clears the category label and the reverse", () => {
+  const toGoal = buildLineEntryPatchRecord({ goalId: "g_car" });
+  assert.equal(toGoal.osStatus, LineEntryStatus.LABELLED);
+  assert.ok("label" in toGoal && !("goalId" in toGoal && toGoal.goalId !== "g_car"));
+  const toLabel = buildLineEntryPatchRecord({ label: "Rent" });
+  assert.ok("goalId" in toLabel);
+  assert.equal(lineEntryPatchSchema.safeParse({ label: "Rent", goalId: "g_car" }).success, false);
 });

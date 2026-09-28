@@ -13,8 +13,8 @@ export function plaidStatusOf(tx: Pick<PlaidTransaction, "pending">): PlaidTrans
   return tx.pending ? PlaidTransactionStatus.PENDING : PlaidTransactionStatus.POSTED;
 }
 
-export function osStatusOf(label: string | undefined): LineEntryStatus {
-  return label ? LineEntryStatus.LABELLED : LineEntryStatus.NOT_LABELLED;
+export function osStatusOf(label: string | undefined, goalId?: string): LineEntryStatus {
+  return label || goalId ? LineEntryStatus.LABELLED : LineEntryStatus.NOT_LABELLED;
 }
 
 export function plaidOwnedFields(tx: PlaidTransaction): PlaidOwnedFields {
@@ -34,11 +34,11 @@ export function byDateDesc(a: LineEntryView, b: LineEntryView): number {
   return b.date.localeCompare(a.date) || a.name.localeCompare(b.name);
 }
 
-type StoredLabel = Pick<LineEntryView, "id" | "label" | "osStatus">;
+type StoredLabel = Pick<LineEntryView, "id" | "label" | "goalId" | "osStatus">;
 
 /**
  * Updates carry only Plaid-owned fields, so a sync can never overwrite a label.
- * A posted transaction replacing a stored pending one inherits its label, and
+ * A posted transaction replacing a stored pending one inherits its label or goal, and
  * the pending row is deleted rather than marked removed.
  */
 export function planSync(delta: PlaidSyncDelta, stored: ReadonlyMap<string, StoredLabel>): SyncPlan {
@@ -57,11 +57,12 @@ export function planSync(delta: PlaidSyncDelta, stored: ReadonlyMap<string, Stor
     }
     const settled = tx.pendingTransactionId ? stored.get(tx.pendingTransactionId) : undefined;
     if (settled) plan.deletes.push(settled.id);
-    plan.creates.push(
-      settled?.label
-        ? { ...fields, label: settled.label, osStatus: settled.osStatus }
-        : { ...fields, osStatus: LineEntryStatus.NOT_LABELLED },
-    );
+    plan.creates.push({
+      ...fields,
+      ...(settled?.label ? { label: settled.label } : {}),
+      ...(settled?.goalId ? { goalId: settled.goalId } : {}),
+      osStatus: settled ? settled.osStatus : LineEntryStatus.NOT_LABELLED,
+    });
   }
 
   const deleted = new Set(plan.deletes);
@@ -83,12 +84,14 @@ export type LineEntryGroups = {
   all: LineEntryView[];
   labelled: LineEntryView[];
   unlabelled: LineEntryView[];
+  fromGoals: LineEntryView[];
 };
 
 export type LineEntryTotals = {
   spent: number;
   spentLabelled: number;
   spentUnlabelled: number;
+  spentFromGoals: number;
   usedByLabel: Record<string, number>;
 };
 
@@ -99,7 +102,8 @@ export function groupLineEntries(rows: LineEntryView[]): LineEntryGroups {
   return {
     all,
     labelled: all.filter((row) => row.label !== undefined),
-    unlabelled: all.filter((row) => row.label === undefined),
+    unlabelled: all.filter((row) => row.label === undefined && row.goalId === undefined),
+    fromGoals: all.filter((row) => row.goalId !== undefined),
   };
 }
 
@@ -113,6 +117,7 @@ export function totalLineEntries(groups: LineEntryGroups): LineEntryTotals {
     spent: outflow(groups.all),
     spentLabelled: outflow(groups.labelled),
     spentUnlabelled: outflow(groups.unlabelled),
+    spentFromGoals: outflow(groups.fromGoals),
     usedByLabel,
   };
 }

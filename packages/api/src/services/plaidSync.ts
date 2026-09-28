@@ -12,6 +12,7 @@ import {
 import { db, FieldValue, Timestamp } from "../config/firebase.js";
 import { AppError } from "../core/errors/errors.js";
 import { linkedItems, syncTransactions, type PlaidItem } from "../integrations/plaid.js";
+import { syncGoalSpends } from "./goals.js";
 
 const MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const FIRESTORE_BATCH_LIMIT = 500;
@@ -60,6 +61,13 @@ async function storedLabels(delta: PlaidSyncDelta): Promise<Map<string, LineEntr
   return stored;
 }
 
+function goalFundedIds(plan: SyncPlan, stored: Map<string, LineEntryView>): string[] {
+  const ids = [...plan.updates, ...plan.creates].map((row) => row.id);
+  return [...ids, ...plan.removed, ...plan.deletes].filter(
+    (id) => Boolean(stored.get(id)?.goalId) || plan.creates.some((row) => row.id === id && row.goalId),
+  );
+}
+
 async function applyPlan(plan: SyncPlan, now: Date): Promise<void> {
   const writes: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [
     ...plan.creates.map(({ id, ...view }) => (batch: FirebaseFirestore.WriteBatch) =>
@@ -100,6 +108,7 @@ async function syncItem(item: PlaidItem): Promise<ItemSyncResult> {
     const stored = await storedLabels(delta);
     const plan = planSync(delta, stored);
     await applyPlan(plan, now);
+    await syncGoalSpends(goalFundedIds(plan, stored));
     // Cursor moves only after every write lands, so a crash replays the same delta
     await plaidItems.doc(item.itemId).set({ cursor: nextCursor, syncedAt: now }, { merge: true });
     return {

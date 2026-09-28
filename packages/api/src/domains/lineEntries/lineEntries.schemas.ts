@@ -24,12 +24,14 @@ export const lineEntryPatchSchema = z
   .object({
     amount: z.number().int(),
     label,
+    goalId: nonEmptyString,
     plaidStatus: z.enum(PlaidTransactionStatus),
     osStatus: z.enum(LineEntryStatus),
   })
   .partial()
   .strict()
-  .refine((data) => Object.keys(data).length > 0, { message: "At least one field must be provided." });
+  .refine((data) => Object.keys(data).length > 0, { message: "At least one field must be provided." })
+  .refine((data) => !(data.label && data.goalId), { message: "A transaction is paid from a category or a goal, not both." });
 
 export const lineEntryRecordSchema = z
   .object({
@@ -39,6 +41,7 @@ export const lineEntryRecordSchema = z
     monthYear: monthYearSchema,
     currency,
     label: label.optional(),
+    goalId: nonEmptyString.optional(),
     pendingTransactionId: nonEmptyString.optional(),
     plaidStatus: z.enum(PlaidTransactionStatus),
     osStatus: z.enum(LineEntryStatus),

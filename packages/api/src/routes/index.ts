@@ -1,21 +1,22 @@
 import { toMonthYear } from "@myos/shared";
 import { Router } from "express";
 import { z } from "zod";
-import { defineResource } from "../core/resourceBuilder/resourceBuilder.js";
+import { processError } from "../core/errors/errorResponses.js";
+import { resolvePermission } from "../core/resourceBuilder/resourceBuilder.auth.js";
+import { defineResource, parseOrThrow } from "../core/resourceBuilder/resourceBuilder.js";
 import { budgetDomain } from "../domains/budgets/budgets.domain.js";
 import { monthYearSchema } from "../domains/budgets/budgets.schemas.js";
 import { firestoreIndexDomain } from "../domains/firestoreIndexes/firestoreIndexes.domain.js";
-import {
-  afterGoalAllocationWrite,
-  assertReversible,
-  goalAllocationDomain,
-} from "../domains/goalAllocations/goalAllocations.domain.js";
-import type { GoalAllocationEntity } from "../domains/goalAllocations/goalAllocations.types.js";
+import { goalAllocationDomain, reverseAllocation } from "../domains/goalAllocations/goalAllocations.domain.js";
+import { goalTransferSchema } from "../domains/goalAllocations/goalAllocations.schemas.js";
+import type { GoalAllocationEntity, GoalTransferPost } from "../domains/goalAllocations/goalAllocations.types.js";
 import { goalDomain } from "../domains/goals/goals.domain.js";
 import { lineEntryDomain } from "../domains/lineEntries/lineEntries.domain.js";
 import { monthReportDomain } from "../domains/monthReports/monthReports.domain.js";
+import { completeGoal, transferBetweenGoals } from "../services/goals.js";
 import { refreshLedger } from "../services/ledgerRefresh.js";
 import { generateMonthReport } from "../services/monthReports.js";
+import { computeOpening, loadSavingsSummary, startSavings } from "../services/savings.js";
 
 export const router = Router();
 
@@ -102,10 +103,10 @@ const monthReport = defineResource({
 });
 
 // ── Goals ─────────────────────────────────────────────────
-// A goal is a savings category that outlives the month. amountSaved is the
-// sum of its allocations: month savings (written by report generation), plus
-// deficit covers and manual moves. Allocations are a ledger: no patch, and
-// only covers and manual moves can be deleted.
+// Goals are buckets inside savings. amountSaved sums the goal's ledger:
+// month-end assignments (made by hand), transfers between goals (dated to any
+// month, never touching month reports), spends from goal-labelled
+// transactions, and the release of leftovers when a goal is completed.
 
 const goal = defineResource({
   inner: goalDomain,
@@ -114,6 +115,14 @@ const goal = defineResource({
     list: { permission: "owner" },
     create: { permission: "owner" },
     patch: { permission: "owner" },
+  },
+  actions: {
+    complete: {
+      method: "post",
+      path: "/:id/completions",
+      permission: "owner",
+      run: async ({ params }) => ({ status: 201, body: { data: await completeGoal(params.id!) } }),
+    },
   },
 });
 
@@ -125,18 +134,61 @@ const goalAllocation = defineResource({
     create: { permission: "owner" },
   },
   actions: {
+    transfer: {
+      method: "post",
+      path: "/transfers",
+      permission: "owner",
+      inputSchema: goalTransferSchema,
+      run: async ({ input }) => ({
+        status: 201,
+        body: { data: { transferId: await transferBetweenGoals(input as GoalTransferPost) } },
+      }),
+    },
     reverse: {
       method: "delete",
       path: "/:id",
       permission: "owner",
-      rules: (existing) => assertReversible(existing as GoalAllocationEntity),
-      run: async ({ params, existing, repo }) => {
-        await repo.delete(params.id!);
-        await afterGoalAllocationWrite({ id: params.id!, before: existing, after: null });
+      run: async ({ existing }) => {
+        await reverseAllocation(existing as GoalAllocationEntity);
         return { status: 204, body: undefined };
       },
     },
   },
+});
+
+// ── Savings ───────────────────────────────────────────────
+// The parent of all goals. Not a stored resource: the summary is derived from
+// the opening, finished month reports and the goal ledger.
+
+const savings = Router();
+const startSchema = z.object({ startMonth: monthYearSchema }).strict();
+
+savings.get("/", async (req, res) => {
+  try {
+    await resolvePermission(req, "owner");
+    res.json({ data: await loadSavingsSummary() });
+  } catch (error) {
+    processError(res, error, "Failed to load savings");
+  }
+});
+
+savings.post("/starts", async (req, res) => {
+  try {
+    await resolvePermission(req, "owner");
+    const { startMonth } = parseOrThrow(startSchema, req.body, "savings start");
+    res.status(201).json({ data: await startSavings(startMonth) });
+  } catch (error) {
+    processError(res, error, "Failed to start savings");
+  }
+});
+
+savings.post("/openings", async (req, res) => {
+  try {
+    await resolvePermission(req, "owner");
+    res.status(201).json({ data: await computeOpening() });
+  } catch (error) {
+    processError(res, error, "Failed to compute the opening");
+  }
 });
 
 // ── Mounts ────────────────────────────────────────────────
@@ -148,3 +200,4 @@ router.use("/goal-allocations", goalAllocation.router);
 router.use("/goals", goal.router);
 router.use("/line-entries", lineEntry.router);
 router.use("/month-reports", monthReport.router);
+router.use("/savings", savings);

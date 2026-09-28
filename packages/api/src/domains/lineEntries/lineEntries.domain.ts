@@ -1,7 +1,10 @@
 import { LINE_ENTRIES_COLLECTION, osStatusOf, type MonthYear } from "@myos/shared";
+import { FieldValue } from "../../config/firebase.js";
 import { FirestoreRepo, type FirestoreRepoTypeSet } from "../../core/firestore/firestoreRepo.js";
 import type { DomainInner, WriteChange } from "../../core/resourceBuilder/resourceBuilder.types.js";
+import { syncGoalSpends } from "../../services/goals.js";
 import { regeneratePastReports } from "../../services/monthReports.js";
+import { activeGoal } from "../goals/goals.domain.js";
 import { lineEntryQueryFilterFields, lineEntryQuerySchema } from "./lineEntries.query.js";
 import { lineEntryPatchSchema, lineEntryPostSchema, lineEntryRecordSchema } from "./lineEntries.schemas.js";
 import type { LineEntryEntity, LineEntryPatch, LineEntryPost, LineEntryQuery, LineEntryRecord } from "./lineEntries.types.js";
@@ -22,9 +25,21 @@ export function buildLineEntryCreateRecord(input: LineEntryPost): LineEntryRecor
   };
 }
 
-export function buildLineEntryPatchRecord(patch: LineEntryPatch): LineEntryPatch & { updatedAt: Date } {
-  const osStatus = "label" in patch && patch.osStatus === undefined ? osStatusOf(patch.label) : patch.osStatus;
-  return { ...patch, ...(osStatus ? { osStatus } : {}), updatedAt: new Date() };
+export function buildLineEntryPatchRecord(patch: LineEntryPatch): Record<string, unknown> {
+  const labelling = patch.label !== undefined || patch.goalId !== undefined;
+  const osStatus = labelling && patch.osStatus === undefined ? osStatusOf(patch.label, patch.goalId) : patch.osStatus;
+  return {
+    ...patch,
+    ...(patch.goalId ? { label: FieldValue.delete() } : {}),
+    ...(patch.label ? { goalId: FieldValue.delete() } : {}),
+    ...(osStatus ? { osStatus } : {}),
+    updatedAt: new Date(),
+  };
+}
+
+async function buildGoalAwarePatchRecord(patch: LineEntryPatch): Promise<Record<string, unknown>> {
+  if (patch.goalId) await activeGoal(patch.goalId);
+  return buildLineEntryPatchRecord(patch);
 }
 
 function changedMonths({ before, after }: WriteChange): MonthYear[] {
@@ -42,8 +57,9 @@ export const lineEntryDomain: DomainInner = {
   },
   createId: (input) => (input as LineEntryPost).id,
   buildCreateRecord: (input) => buildLineEntryCreateRecord(input as LineEntryPost),
-  buildPatchRecord: (_existing, patch) => buildLineEntryPatchRecord(patch as LineEntryPatch),
+  buildPatchRecord: (_existing, patch) => buildGoalAwarePatchRecord(patch as LineEntryPatch),
   afterWrite: async (change) => {
+    await syncGoalSpends([change.id]);
     await regeneratePastReports(changedMonths(change));
   },
 };

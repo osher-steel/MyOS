@@ -41,6 +41,7 @@ export interface LineEntry {
   monthYear: MonthYear;
   currency: string;
   label?: string;
+  goalId?: string; // paid from a goal instead of the month's budget; never set with label
   pendingTransactionId?: string;
   plaidStatus: PlaidTransactionStatus;
   osStatus: LineEntryStatus;
@@ -78,27 +79,49 @@ export interface SyncPlan {
   deletes: string[];
 }
 
+export enum GoalStatus {
+  ACTIVE = "active",
+  COMPLETED = "completed",
+}
+
 export interface Goal {
   id: string;
-  name: string; // matches a savings category name in monthly budgets
+  name: string;
   targetAmount?: number; // cents
-  amountSaved: number; // cents, sum of this goal's allocations
+  amountSaved: number; // cents, sum of this goal's allocations; negative when overdrawn
+  status: GoalStatus;
+  completedAt?: FireTimestampLike;
   createdAt: FireTimestampLike;
   updatedAt: FireTimestampLike;
 }
 
 export enum GoalAllocationReason {
-  MONTH_SAVINGS = "month_savings",
-  DEFICIT_COVER = "deficit_cover",
-  MANUAL = "manual",
+  ASSIGNMENT = "assignment",
+  TRANSFER = "transfer",
+  GOAL_SPEND = "goal_spend",
+  RELEASE = "release",
 }
 
 export interface GoalAllocation {
   id: string;
   goalId: string;
-  monthYear: MonthYear;
+  monthYear?: MonthYear; // the month this is attributed to; absent for moves from unassigned savings
   amount: number; // cents, negative draws from the goal
   reason: GoalAllocationReason;
+  transferId?: string;
+  lineEntryId?: string;
   note?: string;
   createdAt: FireTimestampLike;
+}
+
+export interface SavingsOpening {
+  amount: number; // cents: balance minus the start month's total allocation
+  balance: number;
+  allocated: number;
+  computedAt: FireTimestampLike;
+}
+
+export interface SavingsState {
+  startMonth: MonthYear;
+  opening?: SavingsOpening;
 }

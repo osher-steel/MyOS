@@ -1,5 +1,5 @@
-import { GOALS_COLLECTION } from "@myos/shared";
-import { ServiceConflictError } from "../../core/errors/errors.js";
+import { GOALS_COLLECTION, GoalStatus } from "@myos/shared";
+import { ServiceConflictError, ServiceNotFoundError, ServiceValidationError } from "../../core/errors/errors.js";
 import { FirestoreRepo, type FirestoreRepoTypeSet } from "../../core/firestore/firestoreRepo.js";
 import type { DomainInner } from "../../core/resourceBuilder/resourceBuilder.types.js";
 import { goalQueryFilterFields, goalQuerySchema } from "./goals.query.js";
@@ -13,7 +13,24 @@ export const goalRepo = new FirestoreRepo<FirestoreRepoTypeSet<GoalEntity, GoalR
 
 export function newGoalRecord(input: GoalPost): GoalRecord {
   const now = new Date();
-  return { ...input, amountSaved: 0, createdAt: now, updatedAt: now };
+  return { ...input, amountSaved: 0, status: GoalStatus.ACTIVE, createdAt: now, updatedAt: now };
+}
+
+/** Completed goals take no new money: no assignments, transfers or goal labels. */
+export async function activeGoal(goalId: string): Promise<GoalEntity> {
+  let goal: GoalEntity;
+  try {
+    goal = await goalRepo.get(goalId);
+  } catch (error) {
+    if (error instanceof ServiceNotFoundError) throw goalRulesError(["Unknown goal."]);
+    throw error;
+  }
+  if (goal.status !== GoalStatus.ACTIVE) throw goalRulesError([`${goal.name} is completed.`]);
+  return goal;
+}
+
+export function goalRulesError(formErrors: string[]): ServiceValidationError {
+  return new ServiceValidationError("Invalid goal change.", { formErrors, fieldErrors: {} });
 }
 
 async function buildGoalCreateRecord(input: GoalPost): Promise<GoalRecord> {

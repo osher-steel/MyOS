@@ -25,11 +25,13 @@ export interface MonthReport {
   savingsPlanned: number;
   savingsActual: number;
   balanceDeduction: number;
+  savingsResult: number;
+  goalSpent: number;
   groups: GroupUsage[];
   outcome: MonthOutcome | null;
 }
 
-export type StoredMonthReport = MonthReport & { id: string; generatedAt: FireTimestampLike; deficitCovered: number };
+export type StoredMonthReport = MonthReport & { id: string; generatedAt: FireTimestampLike };
 
 export { budgetId as monthReportId } from "./budgetId.js";
 
@@ -43,6 +45,7 @@ export function monthReport(monthYear: MonthYear, budget: Budget | null, rows: L
     entry,
     spent: totals.spent,
     unlabelledSpent: totals.spentUnlabelled,
+    goalSpent: totals.spentFromGoals,
     net: entry - totals.spent,
   };
 
@@ -54,11 +57,12 @@ export function monthReport(monthYear: MonthYear, budget: Budget | null, rows: L
       incomeShortfall: 0,
       allocated: 0,
       spendingAllocated: 0,
-      spendingUsed: totals.spent,
+      spendingUsed: totals.spent - totals.spentFromGoals,
       variance: 0,
       savingsPlanned: 0,
       savingsActual: 0,
       balanceDeduction: 0,
+      savingsResult: 0,
       groups: [],
       outcome: null,
     };
@@ -80,6 +84,7 @@ export function monthReport(monthYear: MonthYear, budget: Budget | null, rows: L
     savingsPlanned: savings.allocated,
     savingsActual: savings.used,
     balanceDeduction,
+    savingsResult: savings.allocated + usage.variance,
     groups: usage.groups,
     outcome:
       usage.variance >= 0 ? MonthOutcome.UNDER : balanceDeduction > 0 ? MonthOutcome.DEFICIT : MonthOutcome.OVER,
