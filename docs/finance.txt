@@ -1,0 +1,112 @@
+Finance plan
+
+1. Transaction data (built)
+- Sync stores Plaid's enrichment on every line entry, refreshed on each sync and never touching labels:
+  accountId, merchantName, merchantEntityId, originalDescription, counterparties [{name, type, entityId}],
+  categoryPrimary / categoryDetailed / categoryConfidence (Plaid personal finance category v2),
+  paymentChannel, authorizedDate, logoUrl, website, city, region
+- Derived on sync:
+  - descriptionKey: normalized description, the same for every visit to one store
+    "TST*BARRACUDA TAPHOUSE Miami FL 09/11" -> "BARRACUDA TAPHOUSE MIAMI FL"
+  - marketplace: the delivery or marketplace app behind the merchant (DoorDash, Uber Eats); the merchant is the restaurant
+- Plaid's `name` carries the purchase date, so rules never match on raw name
+- `pnpm api resync` drops the Plaid cursor, replays full history, reruns every rule and regenerates every report
+
+2. Filing a transaction (built)
+- osStatus: labelled | not_labelled | mislabeled | excluded
+- excluded = not spending or income (transfers between your own accounts). Dropped from spent, entry,
+  unlabelled counts and breakdowns
+- labelSource: manual | rule (who filed it); ruleId points at the rule that did it
+- Any hand label, goal or exclusion sets manual and clears ruleId. Sending the same label back confirms an auto label
+- Rules only file entries with no label, no goal and not excluded
+
+3. Income (built)
+- Credits are labelled like spending, with their own labels (IncomeSource enum, stored as the label string):
+  DIBS pay, Freelance, Reimbursement, Interest, Gift received, Other income
+- A spending category on a credit is a refund and nets out of that category
+- Rules never put an income label on a debit; income labels learn from credits (DIBS ACH pay learns from its description)
+- Month reports tally income by label in breakdowns.byLabel (negative amounts)
+
+4. Tags (built)
+- Closed set kept in the tags collection (GET/POST /tags); entries and rules may only use tags that exist
+- New tags from the "+ new tag" option; names are normalized ("Food Delivery" -> food_delivery)
+- Seeded: food_delivery, bar, coffee, kava, outing, date, gas, rideshare, parking, gym, streaming, software,
+  business, travel, gift
+- tags is the effective list; tagSource: manual | rule
+- Rules keep rule tags up to date on every entry not tagged by hand; editing tags by hand makes them manual for good
+- Filter with ?tags=bar; carried from pending to posted
+
+5. Rules (built) - collection labelRules, API /label-rules
+- { name, field, match, value, label?, exclude?, tags?, source: manual | learned, enabled, learnedFrom, matchCount, lastMatchedAt }
+- A rule does at least one of: label, exclude (never both), add tags
+- field: merchantEntityId | merchantName | counterparty | description | category
+- match: exact | contains (whole words) | tokens (all words, any order). Merchant ids and categories are exact only
+- name is what to show: the merchant name for merchant-id rules
+- Filing (label / exclude): the single most specific match wins
+  merchant id > merchant name > counterparty > description > category, then your rules over learned ones, then tighter matches
+- Tags: every matching rule adds its tags. "Denny's -> Eating out" + "DoorDash -> food_delivery" both apply to a Denny's DoorDash order
+- Id is field_match_value, so a rule can't exist twice and a disabled rule is never re-learned
+- Runs on every sync; any rule create, edit or delete reruns every entry
+- Relabelling a rule moves every entry it labelled; hand-labelled entries keep theirs
+- Live rules include:
+  - Own account CHK ...8672 and ...6362: description tokens "TRANSFER 8672" / "TRANSFER 6362" -> exclude
+  - DoorDash, Uber Eats: counterparty -> food_delivery
+  - Barracuda Taphouse -> Fun + bar
+
+6. Learning rules (built)
+- Labels, second sighting: same merchantEntityId, else same merchantName, else same descriptionKey as an entry
+  labelled by hand -> learned rule, applied to the new entry; the first keeps its manual label
+- Labels by category: a confident (HIGH / VERY_HIGH) Plaid category that two different merchants were hand-labelled
+  the same -> learned category rule. Shell + Marathon labelled Auto, then Exxon is labelled Auto
+  - One merchant is not enough: on real history a single gas station mapped the category wrong 2/2 times (snacks, beer)
+  - Never for transfers, income, loan payments or Plaid's *_OTHER_* catch-alls
+- Tags, second sighting: most specific of merchant id, merchant name, marketplace, description shared with entries
+  tagged by hand -> the tags all of them have. Tag one DoorDash order food_delivery and every DoorDash order gets it
+  - A tag learned for a merchant joins that merchant's learned label rule (one rule: Fun + bar)
+- Transfers never learn (Zelle, Apple Cash, Cash App, Venmo, bank transfers): they name who got the money, not what
+  it bought. A rule you write still applies to them
+- Any disagreement between hand labels stops label learning; it stays manual
+- Also runs when you label or tag by hand, over entries sharing that merchant, marketplace, description or category
+- Hand correction of a rule-labelled entry: a learned merchant/description rule takes the new label (and relabels
+  its entries); a learned category rule is switched off; rules you wrote or edited are never changed
+- Track record: 13 of 14 correct replaying 53 hand labels; first resync auto-labelled 83
+
+7. Reports and insights (built)
+- Month reports (stored and open month), with or without a budget:
+  unlabelledCount, unlabelledSpent, breakdowns {byLabel, byTag, byCategory, byMerchant} -> {count, amount} signed cents
+- GET /line-entries/breakdowns?from=YYYY-MM&to=YYYY-MM for any range
+- How many gas purchases: byCategory.TRANSPORTATION_GAS. Bar nights: byTag.bar
+- Budget usage already computes unallocated = income - needs - wants - savings
+
+8. API reference
+- /label-rules: GET, GET /:id, DELETE /:id
+  POST {name?, field, match?, value, label?, exclude?: true, tags?, enabled?}
+  PATCH /:id {name?, label?: string | null, exclude?: boolean, tags?, enabled?}; any PATCH makes the rule manual
+  POST /applications {dryRun?} -> {assignments, tagAssignments, learned, months}
+- PATCH /line-entries/:id: label | goalId | osStatus "excluded" | tags (existing tag ids; [] clears). labelSource/tagSource are server-set
+- /tags: GET, POST {name} -> id is the normalized name, 409 if it exists
+- Line entry filters: labelSource, ruleId, tags, tagSource, merchantEntityId, merchantName, marketplace,
+  descriptionKey, categoryPrimary, categoryDetailed
+- POST /line-entries/syncs reports autoLabelled and rulesLearned per bank
+
+9. UI (another agent, apps/web) - asks so far
+- Rules page: show name (not the raw merchant id), add tags and exclude on a rule, preview via dryRun
+- Transactions (done): inline "+ tag" dropdown with "+ new tag", tag chips with remove in the card,
+  income labels for credits (spending categories offered as refunds)
+- Transactions (todo): excluded rows muted or in their own filter
+- Monthly report: spend by label and by tag even without a budget, plus count and $ unlabelled
+- Budget panel: unallocated $
+- Home: goals and at least savings
+- Goals tab: manage allocations, cumulative progress charts (goalAllocations are a dated ledger),
+  goals previously met (status completed + completedAt)
+
+10. Next
+- AI labelling for what rules can't reach: Claude suggests a label from hand-labelled history and the month's
+  categories, stored as labelSource ai with a confidence; low confidence waits for review
+- API tokens with expiry for agents
+  - collection apiTokens: name, sha256 hash (never the token), display prefix, scopes ["*"], expiresAt, revokedAt, lastUsedAt
+  - token shown once at creation; a token cannot mint or revoke tokens; MYOS_API_KEY stays as fallback until replaced
+  - admin page to create, list, revoke
+  - make a document for it
+- Skill: agent reviews transactions, confirms or fixes auto labels, reviews past budgets, and uses tags and
+  breakdowns to generate insights

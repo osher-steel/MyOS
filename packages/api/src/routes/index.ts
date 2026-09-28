@@ -11,8 +11,13 @@ import { goalAllocationDomain, reverseAllocation } from "../domains/goalAllocati
 import { goalTransferSchema } from "../domains/goalAllocations/goalAllocations.schemas.js";
 import type { GoalAllocationEntity, GoalTransferPost } from "../domains/goalAllocations/goalAllocations.types.js";
 import { goalDomain } from "../domains/goals/goals.domain.js";
+import { labelRuleDomain } from "../domains/labelRules/labelRules.domain.js";
+import { labelRuleApplicationSchema } from "../domains/labelRules/labelRules.schemas.js";
 import { lineEntryDomain } from "../domains/lineEntries/lineEntries.domain.js";
 import { monthReportDomain } from "../domains/monthReports/monthReports.domain.js";
+import { tagDomain } from "../domains/tags/tags.domain.js";
+import { autoLabelAll } from "../services/autoLabel.js";
+import { breakdownsBetween } from "../services/breakdowns.js";
 import { completeGoal, transferBetweenGoals } from "../services/goals.js";
 import { refreshLedger } from "../services/ledgerRefresh.js";
 import { generateMonthReport } from "../services/monthReports.js";
@@ -52,8 +57,10 @@ const budget = defineResource({
 
 // ── Line entries ──────────────────────────────────────────
 // One document per Plaid transaction, id = Plaid transaction_id. POST /syncs
-// pulls every change since the stored cursor, keeps manual labels, and
-// regenerates the stored reports of any finished month it touched.
+// pulls every change since the stored cursor, keeps manual labels, runs label
+// rules over what is still unlabelled, and regenerates the stored reports of
+// any finished month it touched. GET /breakdowns tallies a month range by
+// label, tag, Plaid category and merchant.
 
 const lineEntry = defineResource({
   inner: lineEntryDomain,
@@ -71,6 +78,59 @@ const lineEntry = defineResource({
       permission: "owner",
       run: async () => ({ body: { data: await refreshLedger() } }),
     },
+    breakdowns: {
+      method: "get",
+      path: "/breakdowns",
+      permission: "owner",
+      inputSchema: z
+        .object({ from: monthYearSchema.optional(), to: monthYearSchema.optional() })
+        .strict()
+        .refine(({ from, to }) => !from || !to || from <= to, "from must not be after to."),
+      run: async ({ input }) => {
+        const { from, to } = input as { from?: string; to?: string };
+        const until = to ?? toMonthYear();
+        return { body: { data: await breakdownsBetween(from ?? until, until) } };
+      },
+    },
+  },
+});
+
+// ── Label rules ───────────────────────────────────────────
+// Id is `${field}_${match}_${value}`. A rule labels or excludes what is still
+// unfiled (the most specific match wins) and adds tags to anything not tagged
+// by hand (every match adds up). Learned rules come from a merchant's second
+// sighting. Any rule write reruns every entry, and relabelling a rule moves the
+// entries it labelled. POST /applications reruns, or previews with dryRun.
+
+const labelRule = defineResource({
+  inner: labelRuleDomain,
+  endpoints: {
+    get: { permission: "owner" },
+    list: { permission: "owner" },
+    create: { permission: "owner" },
+    patch: { permission: "owner" },
+    delete: { permission: "owner" },
+  },
+  actions: {
+    apply: {
+      method: "post",
+      path: "/applications",
+      permission: "owner",
+      inputSchema: labelRuleApplicationSchema,
+      run: async ({ input }) => ({ body: { data: await autoLabelAll(input as { dryRun: boolean }) } }),
+    },
+  },
+});
+
+// ── Tags ──────────────────────────────────────────────────
+// The closed set of secondary tokens. Id is the normalized name ("Food
+// delivery" -> food_delivery); entries and rules may only carry these.
+
+const tag = defineResource({
+  inner: tagDomain,
+  endpoints: {
+    list: { permission: "owner" },
+    create: { permission: "owner" },
   },
 });
 
@@ -198,6 +258,8 @@ router.use("/budgets", budget.router);
 router.use("/firestore-index-requests", firestoreIndex.router);
 router.use("/goal-allocations", goalAllocation.router);
 router.use("/goals", goal.router);
+router.use("/label-rules", labelRule.router);
 router.use("/line-entries", lineEntry.router);
 router.use("/month-reports", monthReport.router);
 router.use("/savings", savings);
+router.use("/tags", tag.router);

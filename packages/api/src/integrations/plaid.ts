@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { toCents, type PlaidSyncDelta, type PlaidTransaction } from "@myos/shared";
+import { toCents, type Counterparty, type PlaidSyncDelta, type PlaidTransaction } from "@myos/shared";
 import { ServiceUpstreamError } from "../core/errors/errors.js";
 
 export type PlaidItem = { itemId: string; accessToken: string; institution: string };
@@ -11,11 +11,22 @@ type StoredItem = { access_token?: string; item_id?: string; institution?: strin
 type PlaidTransactionRow = {
   transaction_id: string;
   pending_transaction_id: string | null;
+  account_id: string;
   name: string;
+  merchant_name: string | null;
+  merchant_entity_id: string | null;
+  original_description: string | null;
   amount: number;
   date: string;
+  authorized_date: string | null;
   iso_currency_code: string | null;
   pending: boolean;
+  payment_channel: string | null;
+  logo_url: string | null;
+  website: string | null;
+  location: { city: string | null; region: string | null } | null;
+  personal_finance_category: { primary: string; detailed: string; confidence_level: string | null } | null;
+  counterparties: Array<{ name: string; type: string; entity_id: string | null }> | null;
 };
 
 type SyncPage = {
@@ -82,7 +93,18 @@ async function plaid<T>(path: string, body: Record<string, unknown>): Promise<T>
   return data as T;
 }
 
+function present<T extends Record<string, unknown>>(fields: T): Partial<{ [K in keyof T]: NonNullable<T[K]> }> {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== null && value !== undefined)) as Partial<{
+    [K in keyof T]: NonNullable<T[K]>;
+  }>;
+}
+
+function toCounterparties(rows: PlaidTransactionRow["counterparties"]): Counterparty[] {
+  return (rows ?? []).map((row) => ({ name: row.name, type: row.type, ...(row.entity_id ? { entityId: row.entity_id } : {}) }));
+}
+
 function toTransaction(row: PlaidTransactionRow): PlaidTransaction {
+  const category = row.personal_finance_category;
   return {
     id: row.transaction_id,
     name: row.name,
@@ -90,7 +112,23 @@ function toTransaction(row: PlaidTransactionRow): PlaidTransaction {
     date: row.date,
     currency: row.iso_currency_code ?? "USD",
     pending: row.pending,
-    ...(row.pending_transaction_id ? { pendingTransactionId: row.pending_transaction_id } : {}),
+    accountId: row.account_id,
+    counterparties: toCounterparties(row.counterparties),
+    ...present({
+      pendingTransactionId: row.pending_transaction_id,
+      merchantName: row.merchant_name,
+      merchantEntityId: row.merchant_entity_id,
+      originalDescription: row.original_description,
+      categoryPrimary: category?.primary,
+      categoryDetailed: category?.detailed,
+      categoryConfidence: category?.confidence_level,
+      paymentChannel: row.payment_channel,
+      authorizedDate: row.authorized_date,
+      logoUrl: row.logo_url,
+      website: row.website,
+      city: row.location?.city,
+      region: row.location?.region,
+    }),
   };
 }
 
@@ -107,6 +145,7 @@ export async function syncTransactions(
         const page = await plaid<SyncPage>("/transactions/sync", {
           access_token: item.accessToken,
           count: SYNC_PAGE_SIZE,
+          options: { include_original_description: true },
           ...(pageCursor ? { cursor: pageCursor } : {}),
         });
         delta.added.push(...page.added.map(toTransaction));

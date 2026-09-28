@@ -1,5 +1,6 @@
 import type { FireTimestampLike, MonthYear } from "../types/interfaces/common.js";
 import { BudgetGroup, type Budget, type LineEntryView } from "../types/interfaces/finance.js";
+import { lineEntryBreakdowns, type LineEntryBreakdowns } from "./breakdowns.js";
 import { budgetUsage, type GroupUsage } from "./budgetUsage.js";
 import { groupLineEntries, totalLineEntries } from "./lineEntries.js";
 
@@ -18,6 +19,8 @@ export interface MonthReport {
   allocated: number;
   spent: number;
   unlabelledSpent: number;
+  unlabelledCount: number;
+  breakdowns: LineEntryBreakdowns;
   net: number;
   spendingAllocated: number;
   spendingUsed: number;
@@ -35,7 +38,7 @@ export type StoredMonthReport = MonthReport & { id: string; generatedAt: FireTim
 
 export { budgetId as monthReportId } from "./budgetId.js";
 
-/** Credits need no label: every inflow is entry, every outflow is spent. */
+/** Every inflow is entry and every outflow is spent; labels on credits only say where income came from. */
 export function monthReport(monthYear: MonthYear, budget: Budget | null, rows: LineEntryView[]): MonthReport {
   const groups = groupLineEntries(rows);
   const totals = totalLineEntries(groups);
@@ -45,6 +48,8 @@ export function monthReport(monthYear: MonthYear, budget: Budget | null, rows: L
     entry,
     spent: totals.spent,
     unlabelledSpent: totals.spentUnlabelled,
+    unlabelledCount: groups.unlabelled.length,
+    breakdowns: lineEntryBreakdowns(groups.all),
     goalSpent: totals.spentFromGoals,
     net: entry - totals.spent,
   };

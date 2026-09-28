@@ -1,10 +1,12 @@
-import { LINE_ENTRIES_COLLECTION, osStatusOf, type MonthYear } from "@myos/shared";
+import { LabelSource, LINE_ENTRIES_COLLECTION, LineEntryStatus, osStatusOf, type MonthYear } from "@myos/shared";
 import { FieldValue } from "../../config/firebase.js";
 import { FirestoreRepo, type FirestoreRepoTypeSet } from "../../core/firestore/firestoreRepo.js";
 import type { DomainInner, WriteChange } from "../../core/resourceBuilder/resourceBuilder.types.js";
+import { learnFromManualEdit } from "../../services/autoLabel.js";
 import { syncGoalSpends } from "../../services/goals.js";
 import { regeneratePastReports } from "../../services/monthReports.js";
 import { activeGoal } from "../goals/goals.domain.js";
+import { assertKnownTags } from "../tags/tags.domain.js";
 import { lineEntryQueryFilterFields, lineEntryQuerySchema } from "./lineEntries.query.js";
 import { lineEntryPatchSchema, lineEntryPostSchema, lineEntryRecordSchema } from "./lineEntries.schemas.js";
 import type { LineEntryEntity, LineEntryPatch, LineEntryPost, LineEntryQuery, LineEntryRecord } from "./lineEntries.types.js";
@@ -26,12 +28,16 @@ export function buildLineEntryCreateRecord(input: LineEntryPost): LineEntryRecor
 }
 
 export function buildLineEntryPatchRecord(patch: LineEntryPatch): Record<string, unknown> {
-  const labelling = patch.label !== undefined || patch.goalId !== undefined;
-  const osStatus = labelling && patch.osStatus === undefined ? osStatusOf(patch.label, patch.goalId) : patch.osStatus;
+  const excluding = patch.osStatus === LineEntryStatus.EXCLUDED;
+  const filing = patch.label !== undefined || patch.goalId !== undefined || excluding;
+  const osStatus = filing && patch.osStatus === undefined ? osStatusOf(patch.label, patch.goalId) : patch.osStatus;
   return {
     ...patch,
-    ...(patch.goalId ? { label: FieldValue.delete() } : {}),
-    ...(patch.label ? { goalId: FieldValue.delete() } : {}),
+    ...(patch.goalId || excluding ? { label: FieldValue.delete() } : {}),
+    ...(patch.label || excluding ? { goalId: FieldValue.delete() } : {}),
+    ...(filing ? { labelSource: LabelSource.MANUAL, ruleId: FieldValue.delete() } : {}),
+    ...(patch.tags ? { tagSource: LabelSource.MANUAL } : {}),
+    ...(patch.tags?.length === 0 ? { tags: FieldValue.delete() } : {}),
     ...(osStatus ? { osStatus } : {}),
     updatedAt: new Date(),
   };
@@ -39,6 +45,7 @@ export function buildLineEntryPatchRecord(patch: LineEntryPatch): Record<string,
 
 async function buildGoalAwarePatchRecord(patch: LineEntryPatch): Promise<Record<string, unknown>> {
   if (patch.goalId) await activeGoal(patch.goalId);
+  await assertKnownTags(patch.tags);
   return buildLineEntryPatchRecord(patch);
 }
 
@@ -60,6 +67,7 @@ export const lineEntryDomain: DomainInner = {
   buildPatchRecord: (_existing, patch) => buildGoalAwarePatchRecord(patch as LineEntryPatch),
   afterWrite: async (change) => {
     await syncGoalSpends([change.id]);
-    await regeneratePastReports(changedMonths(change));
+    const autoLabelled = await learnFromManualEdit(change);
+    await regeneratePastReports([...changedMonths(change), ...autoLabelled]);
   },
 };

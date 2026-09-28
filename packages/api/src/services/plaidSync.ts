@@ -12,6 +12,7 @@ import {
 import { db, FieldValue, Timestamp } from "../config/firebase.js";
 import { AppError } from "../core/errors/errors.js";
 import { linkedItems, syncTransactions, type PlaidItem } from "../integrations/plaid.js";
+import { autoLabel } from "./autoLabel.js";
 import { syncGoalSpends } from "./goals.js";
 
 const MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000;
@@ -24,6 +25,8 @@ export type ItemSyncResult = {
   updated: number;
   removed: number;
   deleted: number;
+  autoLabelled: number;
+  rulesLearned: number;
   months: MonthYear[];
 };
 
@@ -59,6 +62,10 @@ async function storedLabels(delta: PlaidSyncDelta): Promise<Map<string, LineEntr
     }
   }
   return stored;
+}
+
+function syncedEntries(plan: SyncPlan, stored: Map<string, LineEntryView>): LineEntryView[] {
+  return [...plan.creates, ...plan.updates.map((fields) => ({ ...stored.get(fields.id)!, ...fields }))];
 }
 
 function goalFundedIds(plan: SyncPlan, stored: Map<string, LineEntryView>): string[] {
@@ -98,6 +105,8 @@ async function syncItem(item: PlaidItem): Promise<ItemSyncResult> {
     updated: 0,
     removed: 0,
     deleted: 0,
+    autoLabelled: 0,
+    rulesLearned: 0,
     months: [],
   };
   const claimed = await claim(item, now);
@@ -109,6 +118,7 @@ async function syncItem(item: PlaidItem): Promise<ItemSyncResult> {
     const plan = planSync(delta, stored);
     await applyPlan(plan, now);
     await syncGoalSpends(goalFundedIds(plan, stored));
+    const labelled = await autoLabel(syncedEntries(plan, stored));
     // Cursor moves only after every write lands, so a crash replays the same delta
     await plaidItems.doc(item.itemId).set({ cursor: nextCursor, syncedAt: now }, { merge: true });
     return {
@@ -117,6 +127,8 @@ async function syncItem(item: PlaidItem): Promise<ItemSyncResult> {
       updated: plan.updates.length,
       removed: plan.removed.length,
       deleted: plan.deletes.length,
+      autoLabelled: labelled.assignments.length,
+      rulesLearned: labelled.learned.length,
       months: touchedMonths(plan, stored),
     };
   } catch (error) {

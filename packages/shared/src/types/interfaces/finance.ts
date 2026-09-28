@@ -31,9 +31,56 @@ export enum LineEntryStatus {
   LABELLED = "labelled",
   NOT_LABELLED = "not_labelled",
   MISLABELED = "mislabeled",
+  EXCLUDED = "excluded", // not spending or income, e.g. a transfer between your own accounts
 }
 
-export interface LineEntry {
+export type Tag = string; // a doc id in the tags collection, e.g. "food_delivery"
+
+export interface TagDefinition {
+  id: Tag;
+  createdAt: FireTimestampLike;
+}
+
+export enum IncomeSource {
+  DIBS_PAY = "DIBS pay",
+  FREELANCE = "Freelance",
+  REIMBURSEMENT = "Reimbursement",
+  INTEREST = "Interest",
+  GIFT_RECEIVED = "Gift received",
+  OTHER_INCOME = "Other income",
+}
+
+export enum LabelSource {
+  MANUAL = "manual",
+  RULE = "rule",
+}
+
+export interface Counterparty {
+  name: string;
+  type: string;
+  entityId?: string;
+}
+
+export interface PlaidDetails {
+  accountId?: string;
+  merchantName?: string;
+  merchantEntityId?: string;
+  originalDescription?: string;
+  descriptionKey?: string; // normalized description, the same for every visit to one store
+  marketplace?: string; // the delivery or marketplace app behind the merchant, e.g. DoorDash
+  counterparties?: Counterparty[];
+  categoryPrimary?: string;
+  categoryDetailed?: string;
+  categoryConfidence?: string;
+  paymentChannel?: string;
+  authorizedDate?: ISODateString;
+  logoUrl?: string;
+  website?: string;
+  city?: string;
+  region?: string;
+}
+
+export interface LineEntry extends PlaidDetails {
   id: string; // Plaid transaction_id, so re-sync is idempotent
   name: string;
   amount: number; // cents, Plaid sign: positive is money out
@@ -42,6 +89,10 @@ export interface LineEntry {
   currency: string;
   label?: string;
   goalId?: string; // paid from a goal instead of the month's budget; never set with label
+  labelSource?: LabelSource; // absent on entries labelled before sources existed, which were manual
+  ruleId?: string;
+  tags?: Tag[];
+  tagSource?: LabelSource;
   pendingTransactionId?: string;
   plaidStatus: PlaidTransactionStatus;
   osStatus: LineEntryStatus;
@@ -51,7 +102,7 @@ export interface LineEntry {
 
 export type LineEntryView = Omit<LineEntry, "createdAt" | "updatedAt">;
 
-export interface PlaidTransaction {
+export interface PlaidTransaction extends Omit<PlaidDetails, "descriptionKey" | "marketplace"> {
   id: string;
   name: string;
   amount: number; // cents
@@ -70,13 +121,51 @@ export interface PlaidSyncDelta {
 export type PlaidOwnedFields = Pick<
   LineEntryView,
   "id" | "name" | "amount" | "date" | "monthYear" | "currency" | "pendingTransactionId" | "plaidStatus"
->;
+> &
+  PlaidDetails;
 
 export interface SyncPlan {
   creates: LineEntryView[];
   updates: PlaidOwnedFields[];
   removed: string[];
   deletes: string[];
+}
+
+export enum LabelRuleField {
+  MERCHANT_ENTITY_ID = "merchantEntityId",
+  MERCHANT_NAME = "merchantName",
+  COUNTERPARTY = "counterparty",
+  DESCRIPTION = "description",
+  CATEGORY = "category",
+}
+
+export enum LabelRuleMatch {
+  EXACT = "exact",
+  CONTAINS = "contains",
+  TOKENS = "tokens",
+}
+
+export enum LabelRuleSource {
+  MANUAL = "manual",
+  LEARNED = "learned",
+}
+
+export interface LabelRule {
+  id: string; // derived from field, match and value, so the same rule can't exist twice
+  name: string;
+  field: LabelRuleField;
+  match: LabelRuleMatch;
+  value: string;
+  label?: string;
+  exclude?: true; // files matches as excluded instead of labelling them; never set with label
+  tags?: Tag[];
+  source: LabelRuleSource;
+  enabled: boolean;
+  learnedFrom?: string[];
+  matchCount: number;
+  lastMatchedAt?: FireTimestampLike;
+  createdAt: FireTimestampLike;
+  updatedAt: FireTimestampLike;
 }
 
 export enum GoalStatus {

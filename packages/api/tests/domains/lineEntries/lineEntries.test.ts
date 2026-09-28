@@ -107,6 +107,7 @@ test("sync keeps a manual label when Plaid modifies the transaction", () => {
       monthYear: "2026-09",
       currency: "USD",
       plaidStatus: PlaidTransactionStatus.POSTED,
+      descriptionKey: "PUBLIX",
     },
   ]);
   assert.ok(plan.updates.every((fields) => !("label" in fields) && !("osStatus" in fields)));
