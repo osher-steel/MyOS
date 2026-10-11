@@ -12,3 +12,5 @@ dist/
 .DS_Store
 packages/api/deploy/
 firebase-debug.log
+
+backups/

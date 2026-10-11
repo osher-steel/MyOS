@@ -17,6 +17,8 @@
     "daily": "node --env-file=../../.env --import tsx scripts/daily.ts",
     "resync": "node --env-file=../../.env --import tsx scripts/resync.ts",
     "reports": "node --env-file=../../.env --import tsx scripts/regenerate-reports.ts",
+    "backup": "node --env-file=../../.env --import tsx scripts/backup.ts",
+    "restore": "node --env-file=../../.env --import tsx scripts/restore.ts",
     "savings:start": "node --env-file=../../.env --import tsx scripts/start-savings.ts",
     "deploy": "node scripts/deploy-functions.mjs"
   },
