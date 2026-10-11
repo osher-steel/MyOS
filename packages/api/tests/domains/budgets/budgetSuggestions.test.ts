@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BudgetGroup, budgetSuggestions, DEFAULT_CATEGORIES, type Budget } from "@myos/shared";
+import { BudgetGroup, budgetSuggestions, DEFAULT_CATEGORIES, toMonthYear, type Budget } from "@myos/shared";
 
 const month = (id: string, needs: Record<string, number>): Budget => ({
   id,
@@ -24,4 +24,9 @@ test("suggestions use the newest amount for each past name, then unused defaults
   ]);
   assert.equal(suggestions.filter(({ name }) => name === "Rent").length, 1);
   assert.equal(suggestions.length, 3 + DEFAULT_CATEGORIES[BudgetGroup.NEEDS].length - 2);
+});
+
+test("the open month follows New York time, not the server's", () => {
+  assert.equal(toMonthYear(new Date("2026-11-01T03:30:00Z")), "2026-10");
+  assert.equal(toMonthYear(new Date("2026-11-01T05:00:00Z")), "2026-11");
 });

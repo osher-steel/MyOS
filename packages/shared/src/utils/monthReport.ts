@@ -29,7 +29,6 @@ export interface MonthReport {
   spendingUsed: number;
   variance: number;
   savingsPlanned: number;
-  savingsActual: number;
   savingsResult: number;
   goalSpent: number;
   groups: GroupUsage[];
@@ -79,7 +78,6 @@ export function monthReport(
       spendingUsed: totals.spent - totals.spentFromGoals,
       variance: 0,
       savingsPlanned: 0,
-      savingsActual: 0,
       savingsResult: 0,
       groups: [],
       outcome: null,
@@ -100,7 +98,6 @@ export function monthReport(
     spendingUsed: usage.spendingUsed,
     variance: usage.variance,
     savingsPlanned: savings.allocated,
-    savingsActual: savings.used,
     savingsResult: savings.used,
     groups: usage.groups,
     outcome:

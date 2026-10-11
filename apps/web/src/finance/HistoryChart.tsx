@@ -9,7 +9,7 @@ import { useWidth } from "./useWidth";
 const SERIES = [
   { key: "entry", label: "Entry", color: "var(--chart-entry)" },
   { key: "spent", label: "Spent", color: "var(--chart-spent)" },
-  { key: "savingsActual", label: "Savings", color: "var(--chart-savings)" },
+  { key: "savingsResult", label: "Savings", color: "var(--chart-savings)" },
 ] as const;
 
 const DEFAULT_WIDTH = 640;
@@ -25,6 +25,12 @@ function niceMax(value: number): number {
   const magnitude = 10 ** Math.floor(Math.log10(value));
   const step = magnitude / 2;
   return Math.ceil(value / step) * step;
+}
+
+function roundedBottomBar(x: number, y: number, w: number, h: number, radius = RADIUS): string {
+  if (h <= 0) return "";
+  const r = Math.min(radius, h, w / 2);
+  return `M${x},${y} V${y + h - r} Q${x},${y + h} ${x + r},${y + h} H${x + w - r} Q${x + w},${y + h} ${x + w},${y + h - r} V${y} Z`;
 }
 
 export function roundedTopBar(x: number, y: number, w: number, h: number, radius = RADIUS): string {
@@ -80,13 +86,16 @@ export default function HistoryChart({
   if (loading || !reports) return <p className="entry-meta">Loading…</p>;
   if (reports.length === 0) return <p className="entry-meta">No months to show yet.</p>;
 
-  const max = niceMax(Math.max(...reports.flatMap((r) => SERIES.map((s) => r[s.key]))));
+  const values = reports.flatMap((r) => SERIES.map((s) => r[s.key] ?? 0));
+  const max = niceMax(Math.max(...values));
+  const lowest = Math.min(0, ...values);
+  const min = lowest < 0 ? -niceMax(-lowest) : 0;
   const plotW = width - PAD.left - PAD.right;
   const plotH = HEIGHT - PAD.top - PAD.bottom;
   const slot = plotW / reports.length;
   const barW = (slot * 0.7 - GAP * (SERIES.length - 1)) / SERIES.length;
-  const y = (value: number) => PAD.top + plotH - (value / max) * plotH;
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
+  const y = (value: number) => PAD.top + ((max - value) / (max - min)) * plotH;
+  const ticks = [...new Set([min, 0, ...[0.25, 0.5, 0.75, 1].map((f) => f * max)])];
   const hovered = hover === null ? null : reports[hover]!;
 
   return (
@@ -125,8 +134,10 @@ export default function HistoryChart({
                 <g key={r.monthYear} onMouseEnter={() => setHover(i)} opacity={hover === null || hover === i ? 1 : 0.45}>
                   <rect x={PAD.left + i * slot} y={PAD.top} width={slot} height={plotH} fill="transparent" />
                   {SERIES.map((s, j) => {
-                    const top = y(r[s.key]);
-                    return <path key={s.key} d={roundedTopBar(x0 + j * (barW + GAP), top, barW, PAD.top + plotH - top)} fill={s.color} />;
+                    const value = r[s.key] ?? 0;
+                    const x = x0 + j * (barW + GAP);
+                    const d = value >= 0 ? roundedTopBar(x, y(value), barW, y(0) - y(value)) : roundedBottomBar(x, y(0), barW, y(value) - y(0));
+                    return <path key={s.key} d={d} fill={s.color} />;
                   })}
                   <text x={PAD.left + i * slot + slot / 2} y={HEIGHT - 10} textAnchor="middle" fill="var(--ink-muted)" fontSize={11}>
                     {shortMonth(r.monthYear)}

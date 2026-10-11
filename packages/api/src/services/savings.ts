@@ -1,7 +1,7 @@
 import {
   GOAL_ALLOCATIONS_COLLECTION,
   LINE_ENTRIES_COLLECTION,
-  PlaidTransactionStatus,
+  netPostedInflow,
   type LineEntryView,
   GOALS_COLLECTION,
   MONTH_REPORTS_COLLECTION,
@@ -34,19 +34,17 @@ export async function startSavings(startMonth: MonthYear): Promise<SavingsState>
 /**
  * Opening savings is what the liquid accounts held as the start month began:
  * today's balance with every posted movement on them since then undone. Each
- * month's result then adds entry minus spending on top. Plaid's `current`
- * balance excludes pending, so only posted rows are undone; excluded rows
- * count because transfers out still left the account.
+ * month's result then adds entry minus spending on top.
  */
 export async function computeOpening(): Promise<SavingsState> {
   const state = await loadSavingsState();
   if (!state) throw new Error("Savings has no start month yet.");
   const { balance, accountIds } = await liquidBalance(linkedItems());
   const since = await db.collection(LINE_ENTRIES_COLLECTION).where("date", ">=", `${state.startMonth}-01`).get();
-  const movedSince = since.docs
-    .map((doc) => doc.data() as LineEntryView)
-    .filter((entry) => entry.plaidStatus === PlaidTransactionStatus.POSTED && entry.accountId && accountIds.has(entry.accountId))
-    .reduce((sum, entry) => sum - entry.amount, 0);
+  const movedSince = netPostedInflow(
+    since.docs.map((doc) => doc.data() as LineEntryView),
+    accountIds,
+  );
   const next = { ...state, opening: { amount: balance - movedSince, balance, movedSince, computedAt: new Date() } };
   await stateRef.set(next);
   return next;

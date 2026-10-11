@@ -6,10 +6,13 @@ export function isMonthYear(value: string): value is MonthYear {
   return MONTH_YEAR.test(value);
 }
 
-/** `YYYY-MM` for the given date in local time (defaults to now). */
+export const BOOKKEEPING_TIME_ZONE = "America/New_York";
+
+const yearMonth = new Intl.DateTimeFormat("en-CA", { timeZone: BOOKKEEPING_TIME_ZONE, year: "numeric", month: "2-digit" });
+
+// Pinned to one zone so a UTC server and the browser agree on which month is open
 export function toMonthYear(date: Date = new Date()): MonthYear {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${date.getFullYear()}-${month}`;
+  return yearMonth.format(date).slice(0, 7);
 }
 
 /** The `YYYY-MM` immediately before the given one. */

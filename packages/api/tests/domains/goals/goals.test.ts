@@ -6,6 +6,8 @@ import {
   LineEntryStatus,
   monthReport,
   monthSavingsShares,
+  netPostedInflow,
+  remainingNote,
   PlaidTransactionStatus,
   savingsSummary,
   transferErrors,
@@ -122,4 +124,24 @@ test("assignments are the only allocation created directly, and goal names can't
   assert.equal(goalTransferSchema.safeParse({ fromGoalId: "a", toGoalId: "b", amount: -1, monthYear: "2026-10" }).success, false);
   assert.equal(goalPostSchema.safeParse({ name: "Car", targetAmount: 2000000 }).success, true);
   assert.equal(goalPatchSchema.safeParse({ name: "Truck" }).success, false);
+});
+
+test("net posted inflow counts posted rows on liquid accounts only, excluded and business included", () => {
+  const liquid = new Set(["chk"]);
+  const entries = [
+    row(-200000, { accountId: "chk", label: "Pay" }),
+    row(50000, { accountId: "chk", osStatus: LineEntryStatus.EXCLUDED }),
+    row(30000, { accountId: "chk", business: true }),
+    row(9999, { accountId: "chk", plaidStatus: PlaidTransactionStatus.PENDING }),
+    row(7000, { accountId: "card" }),
+    row(100, { label: "No account" }),
+  ];
+  assert.equal(netPostedInflow(entries, liquid), 120000);
+});
+
+test("a month assigned past its result reads as over-assigned, not overspent", () => {
+  const fmt = (cents: number) => `$${cents / 100}`;
+  assert.match(remainingNote({ result: 10000, remaining: -2000 }, fmt), /more assigned/);
+  assert.match(remainingNote({ result: -2000, remaining: -2000 }, fmt), /overspent/);
+  assert.match(remainingNote({ result: 10000, remaining: 3000 }, fmt), /\$30 left/);
 });

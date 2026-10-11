@@ -1,6 +1,6 @@
 "use client";
 
-import type { Goal, MonthYear } from "@myos/shared";
+import { remainingNote, type Goal, type SavingsMonth } from "@myos/shared";
 import Link from "next/link";
 import { useState } from "react";
 import { assignToGoal } from "@/lib/goalsClient";
@@ -10,16 +10,15 @@ import { errorMessage } from "./useGoals";
 const control = "bg-transparent border-b border-rule focus:border-ink outline-none py-0.5 text-ink";
 
 export default function AssignSavings({
-  monthYear,
-  remaining,
+  month,
   goals,
   onAssigned,
 }: {
-  monthYear: MonthYear;
-  remaining: number;
+  month: SavingsMonth;
   goals: Goal[];
   onAssigned: () => void;
 }) {
+  const { monthYear, remaining } = month;
   const takingOut = remaining < 0;
   const [goalId, setGoalId] = useState("");
   const [amount, setAmount] = useState(String(dollarsInput(Math.abs(remaining))));
@@ -55,9 +54,7 @@ export default function AssignSavings({
 
   return (
     <div className="entry-meta flex flex-col gap-2 border-t border-rule pt-3">
-      <span>
-        {money(Math.abs(remaining))} {takingOut ? "overspent, to take out of a goal" : "left to assign"}
-      </span>
+      <span>{remainingNote(month, money)}</span>
       <div className="flex flex-wrap items-baseline gap-3">
         <span>{takingOut ? "take" : "put"}</span>
         <input

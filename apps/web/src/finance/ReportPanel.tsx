@@ -1,6 +1,6 @@
 "use client";
 
-import { BudgetGroup, formatMonthYear, type Goal, type MonthReport, type MonthYear } from "@myos/shared";
+import { BudgetGroup, formatMonthYear, type Goal, type MonthReport, type MonthYear, type SavingsMonth } from "@myos/shared";
 import { Section } from "@/components/editorial";
 import { money, reportSummary } from "@/lib/format";
 import AssignSavings from "./AssignSavings";
@@ -20,10 +20,11 @@ function Stat({ label, value, muted }: { label: string; value: string; muted?: b
   );
 }
 
-function openItems(report: MonthReport, savingsRemaining: number | null): string[] {
+function openItems(report: MonthReport, savingsMonth: SavingsMonth | null): string[] {
   const items: string[] = [];
-  if (savingsRemaining !== null && savingsRemaining > 0) items.push(`assign ${money(savingsRemaining)} to goals`);
-  if (savingsRemaining !== null && savingsRemaining < 0) items.push(`take ${money(-savingsRemaining)} out of goals`);
+  const remaining = savingsMonth?.remaining ?? 0;
+  if (remaining > 0) items.push(`assign ${money(remaining)} to goals`);
+  if (remaining < 0) items.push(`take ${money(-remaining)} out of goals`);
   if (report.unlabelledCount > 0) {
     items.push(`label ${report.unlabelledCount} ${report.unlabelledCount === 1 ? "entry" : "entries"}`);
   }
@@ -34,7 +35,7 @@ export default function ReportPanel({
   monthYear,
   report,
   inProgress,
-  savingsRemaining,
+  savingsMonth,
   goals,
   businessOwed,
   onAssigned,
@@ -46,7 +47,7 @@ export default function ReportPanel({
   monthYear: MonthYear;
   report: MonthReport;
   inProgress: boolean;
-  savingsRemaining: number | null;
+  savingsMonth: SavingsMonth | null;
   goals: Goal[];
   businessOwed: number | null;
   onAssigned: () => void;
@@ -55,7 +56,7 @@ export default function ReportPanel({
   regenerateError: string | null;
   loading: boolean;
 }) {
-  const open = inProgress || !report.hasBudget ? [] : openItems(report, savingsRemaining);
+  const open = inProgress || !report.hasBudget ? [] : openItems(report, savingsMonth);
   const status = inProgress ? "in progress" : open.length > 0 ? "pending" : "closed";
   return (
     <Section label={`Report · ${formatMonthYear(monthYear)}`} aside={status}>
@@ -109,11 +110,10 @@ export default function ReportPanel({
               To close: {open.join(", ")}.
             </p>
           ) : null}
-          {!inProgress && savingsRemaining ? (
+          {!inProgress && savingsMonth && savingsMonth.remaining !== 0 ? (
             <AssignSavings
-              key={savingsRemaining}
-              monthYear={monthYear}
-              remaining={savingsRemaining}
+              key={savingsMonth.remaining}
+              month={savingsMonth}
               goals={goals}
               onAssigned={onAssigned}
             />

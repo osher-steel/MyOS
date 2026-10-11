@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMonthYear, toMonthYear, type Goal, type SavingsSummary } from "@myos/shared";
+import { formatMonthYear, remainingNote, toMonthYear, type Goal, type SavingsSummary } from "@myos/shared";
 import { useState, type ReactNode } from "react";
 import { assignToGoal, completeGoal, setGoalTarget, transferBetweenGoals } from "@/lib/goalsClient";
 import { centsFromInput, dollarsInput, money } from "@/lib/format";
@@ -117,7 +117,7 @@ export default function GoalRow({
               <option value="">Unassigned savings{savings ? ` · ${money(savings.unassigned)}` : ""}</option>
               {months.map((month) => (
                 <option key={month.monthYear} value={month.monthYear}>
-                  {formatMonthYear(month.monthYear)} · {month.remaining > 0 ? `${money(month.remaining)} left` : `${money(-month.remaining)} overspent`}
+                  {formatMonthYear(month.monthYear)} · {remainingNote(month, money)}
                 </option>
               ))}
             </select>

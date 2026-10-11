@@ -213,7 +213,7 @@ export default function useFinance({ historyMonths = 6, initialMonth }: { histor
       goals,
       businessOwed: business?.owed ?? null,
       onAssigned: () => setReportsVersion((v) => v + 1),
-      savingsRemaining: savings?.months.find((month) => month.monthYear === monthYear)?.remaining ?? null,
+      savingsMonth: savings?.months.find((month) => month.monthYear === monthYear) ?? null,
       loading: budget.loading || stored.loading,
     },
     history: { reports: history, loading: past === null, error: past?.error ?? null },

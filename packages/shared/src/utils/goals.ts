@@ -2,7 +2,9 @@ import type { MonthYear } from "../types/interfaces/common.js";
 import {
   BudgetGroup,
   GoalAllocationReason,
+  PlaidTransactionStatus,
   type GoalAllocation,
+  type LineEntryView,
   type SavingsState,
 } from "../types/interfaces/finance.js";
 import type { MonthReport } from "./monthReport.js";
@@ -57,7 +59,25 @@ export function transferErrors({ amount, fromName, fromBalance, sameGoal }: {
   return errors;
 }
 
+/**
+ * Net posted inflow on the given accounts across `entries`. Plaid's `current`
+ * balance excludes pending, so only posted rows count; excluded and business
+ * rows count too, since that money still moved through the account.
+ */
+export function netPostedInflow(entries: LineEntryView[], accountIds: ReadonlySet<string>): number {
+  return entries
+    .filter((entry) => entry.plaidStatus === PlaidTransactionStatus.POSTED && entry.accountId && accountIds.has(entry.accountId))
+    .reduce((sum, entry) => sum - entry.amount, 0);
+}
+
 export type SavingsMonth = { monthYear: MonthYear; result: number; assigned: number; remaining: number };
+
+/** How a month's unassigned remainder reads: a deficit to cover, or more assigned than the result now allows. */
+export function remainingNote(month: Pick<SavingsMonth, "result" | "remaining">, money: (cents: number) => string): string {
+  if (month.remaining > 0) return `${money(month.remaining)} left to assign`;
+  if (month.result >= 0) return `${money(-month.remaining)} more assigned than the month now saved, to take back out`;
+  return `${money(-month.remaining)} overspent, to take out of a goal`;
+}
 
 export type SavingsSummary = {
   startMonth: MonthYear | null;

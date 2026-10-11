@@ -41,7 +41,7 @@ test("savings is entry minus spending, beating the plan when both income and spe
   assert.equal(report.entry, 4200);
   assert.equal(report.spent, 2700);
   assert.equal(report.variance, 500);
-  assert.equal(report.savingsActual, 1500);
+  assert.equal(report.savingsResult, 1500);
   assert.equal(report.outcome, MonthOutcome.AHEAD);
   assert.equal(report.incomeShortfall, 0);
 });
