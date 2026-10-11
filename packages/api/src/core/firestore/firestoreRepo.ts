@@ -1,5 +1,6 @@
 import { db, FieldPath } from "../../config/firebase.js";
 import { ArrayContainsFilter, BooleanFilter, DateFilter, NumberFilter, StringFilter } from "../../validators/common.js";
+import { bookCollection } from "../books/bookContext.js";
 import { ServiceConflictError, ServiceNotFoundError} from "../errors/errors.js";
 import { convertTimestampsToDates } from "./firestoreData.js";
 import { rethrowMissingFirestoreIndex } from "./firestoreIndexRequests.js";
@@ -26,17 +27,23 @@ export type FirestoreRepoTypeSet<
 };
 
 export class FirestoreRepo<T extends FirestoreRepoTypes>{
-  protected readonly collection: FirebaseFirestore.CollectionReference;
   protected readonly entityName: string;
   protected readonly queryFilterFields: QueryFilterField<T["query"]>[];
+  private readonly scope: "book" | "global";
 
   constructor(
     collectionName: string,
     queryFilterFields: QueryFilterField<T["query"]>[],
+    { scope = "book" }: { scope?: "book" | "global" } = {},
   ) {
-    this.collection = db.collection(collectionName);
     this.entityName = collectionName;
     this.queryFilterFields = queryFilterFields;
+    this.scope = scope;
+  }
+
+  // Resolved per call: a book-scoped repo reads and writes under the request's book
+  protected get collection(): FirebaseFirestore.CollectionReference {
+    return this.scope === "book" ? bookCollection(this.entityName) : db.collection(this.entityName);
   }
 
   protected toEntity(

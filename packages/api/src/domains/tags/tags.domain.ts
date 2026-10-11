@@ -1,5 +1,6 @@
 import { TAGS_COLLECTION, type Tag } from "@myos/shared";
 import { db } from "../../config/firebase.js";
+import { bookCollection } from "../../core/books/bookContext.js";
 import { ServiceValidationError } from "../../core/errors/errors.js";
 import { FirestoreRepo, type FirestoreRepoTypeSet } from "../../core/firestore/firestoreRepo.js";
 import type { DomainInner } from "../../core/resourceBuilder/resourceBuilder.types.js";
@@ -15,7 +16,7 @@ export const tagRepo = new FirestoreRepo<FirestoreRepoTypeSet<TagEntity, TagReco
 /** Tags are a closed set: an entry or rule may only carry tags created through POST /tags. */
 export async function assertKnownTags(tags: Tag[] | undefined): Promise<void> {
   if (!tags?.length) return;
-  const docs = await db.getAll(...tags.map((tag) => db.collection(TAGS_COLLECTION).doc(tag)));
+  const docs = await db.getAll(...tags.map((tag) => bookCollection(TAGS_COLLECTION).doc(tag)));
   const unknown = tags.filter((_, i) => !docs[i]!.exists);
   if (unknown.length > 0) {
     throw new ServiceValidationError("Unknown tags.", { formErrors: [], fieldErrors: { tags: unknown.map((tag) => `No tag "${tag}". Create it first.`) } });

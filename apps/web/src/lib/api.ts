@@ -1,5 +1,5 @@
 import "server-only";
-import type { ErrorResponse } from "@myos/shared";
+import { DEFAULT_BOOK, type ErrorResponse } from "@myos/shared";
 import { env } from "./env";
 
 /**
@@ -8,6 +8,8 @@ import { env } from "./env";
  * makes that a build error rather than a leaked secret.
  */
 const BASE = (process.env.MYOS_API_URL ?? "http://localhost:8787").replace(/\/+$/, "");
+
+export const currentBook = () => process.env.MYOS_BOOK ?? DEFAULT_BOOK;
 
 export class ApiError extends Error {
   constructor(
@@ -29,6 +31,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${env("MYOS_API_KEY")}`,
+      "X-Book": currentBook(),
       ...init.headers,
     },
   });

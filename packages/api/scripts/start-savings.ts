@@ -1,6 +1,10 @@
 import "../src/load-env.js";
+import { scriptBook } from "./book.js";
 import { isMonthYear } from "@myos/shared";
+
 import { computeOpening, startSavings } from "../src/services/savings.js";
+
+scriptBook();
 
 const startMonth = process.argv[2];
 if (!startMonth || !isMonthYear(startMonth)) throw new Error("Usage: pnpm api savings:start YYYY-MM");

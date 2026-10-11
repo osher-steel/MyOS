@@ -11,12 +11,11 @@ import {
   type MonthYear,
   type StoredMonthReport,
 } from "@myos/shared";
-import { ApiError, apiFetch } from "./api";
-import { env } from "./env";
+import { ApiError, apiFetch, currentBook } from "./api";
 
 async function loadBudget(monthYear: MonthYear): Promise<Budget | null> {
   try {
-    return await apiFetch<Budget>(`/budgets/${budgetId(env("MYOS_OWNER_UID"), monthYear)}`);
+    return await apiFetch<Budget>(`/budgets/${budgetId(currentBook(), monthYear)}`);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null;
     throw error;

@@ -10,23 +10,24 @@ import {
   type MonthYear,
 } from "@myos/shared";
 import { db } from "../config/firebase.js";
+import { bookCollection } from "../core/books/bookContext.js";
 import { activeGoal, goalRulesError } from "../domains/goals/goals.domain.js";
 import type { GoalEntity } from "../domains/goals/goals.types.js";
 
-const goals = db.collection(GOALS_COLLECTION);
-const allocations = db.collection(GOAL_ALLOCATIONS_COLLECTION);
-const lineEntries = db.collection(LINE_ENTRIES_COLLECTION);
+const goals = () => bookCollection(GOALS_COLLECTION);
+const allocations = () => bookCollection(GOAL_ALLOCATIONS_COLLECTION);
+const lineEntries = () => bookCollection(LINE_ENTRIES_COLLECTION);
 
 export async function recomputeGoalBalances(goalIds: Iterable<string>): Promise<void> {
   for (const goalId of new Set(goalIds)) {
-    const ledger = await allocations.where("goalId", "==", goalId).get();
+    const ledger = await allocations().where("goalId", "==", goalId).get();
     const amountSaved = ledger.docs.reduce((sum, doc) => sum + (doc.get("amount") as number), 0);
-    await goals.doc(goalId).update({ amountSaved, updatedAt: new Date() });
+    await goals().doc(goalId).update({ amountSaved, updatedAt: new Date() });
   }
 }
 
 export async function assignedIn(monthYear: MonthYear): Promise<number> {
-  const assigned = await allocations
+  const assigned = await allocations()
     .where("monthYear", "==", monthYear)
     .where("reason", "==", GoalAllocationReason.ASSIGNMENT)
     .get();
@@ -39,7 +40,7 @@ const spendId = (lineEntryId: string) => `spend_${lineEntryId}`;
 export async function syncGoalSpends(lineEntryIds: Iterable<string>): Promise<void> {
   const touchedGoals = new Set<string>();
   for (const id of new Set(lineEntryIds)) {
-    const [entryDoc, spendDoc] = await Promise.all([lineEntries.doc(id).get(), allocations.doc(spendId(id)).get()]);
+    const [entryDoc, spendDoc] = await Promise.all([lineEntries().doc(id).get(), allocations().doc(spendId(id)).get()]);
     const entry = entryDoc.exists ? (entryDoc.data() as LineEntryView) : null;
     const previousGoal = spendDoc.exists ? (spendDoc.get("goalId") as string) : undefined;
     if (previousGoal) touchedGoals.add(previousGoal);
@@ -74,7 +75,7 @@ export async function transferBetweenGoals(input: TransferInput): Promise<string
   });
   if (errors.length > 0) throw goalRulesError(errors);
 
-  const transferId = allocations.doc().id;
+  const transferId = allocations().doc().id;
   const leg = (goalId: string, amount: number) => ({
     goalId,
     monthYear: input.monthYear,
@@ -85,15 +86,15 @@ export async function transferBetweenGoals(input: TransferInput): Promise<string
     createdAt: new Date(),
   });
   const batch = db.batch();
-  batch.set(allocations.doc(), leg(from.id, -input.amount));
-  batch.set(allocations.doc(), leg(to.id, input.amount));
+  batch.set(allocations().doc(), leg(from.id, -input.amount));
+  batch.set(allocations().doc(), leg(to.id, input.amount));
   await batch.commit();
   await recomputeGoalBalances([from.id, to.id]);
   return transferId;
 }
 
 export async function deleteTransfer(transferId: string): Promise<void> {
-  const legs = await allocations.where("transferId", "==", transferId).get();
+  const legs = await allocations().where("transferId", "==", transferId).get();
   const batch = db.batch();
   for (const doc of legs.docs) batch.delete(doc.ref);
   await batch.commit();
@@ -107,14 +108,14 @@ export async function completeGoal(goalId: string): Promise<GoalEntity> {
 
   const now = new Date();
   if (goal.amountSaved > 0) {
-    await allocations.doc().set({
+    await allocations().doc().set({
       goalId,
       amount: -goal.amountSaved,
       reason: GoalAllocationReason.RELEASE,
       createdAt: now,
     });
   }
-  await goals.doc(goalId).update({ status: GoalStatus.COMPLETED, completedAt: now, updatedAt: now });
+  await goals().doc(goalId).update({ status: GoalStatus.COMPLETED, completedAt: now, updatedAt: now });
   await recomputeGoalBalances([goalId]);
   return { ...goal, amountSaved: 0, status: GoalStatus.COMPLETED, completedAt: now, updatedAt: now };
 }

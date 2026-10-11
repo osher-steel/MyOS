@@ -13,21 +13,20 @@ import {
   type SavingsSummary,
   type StoredMonthReport,
 } from "@myos/shared";
-import { db } from "../config/firebase.js";
-import { budgetUserId } from "../domains/budgets/budgets.domain.js";
-import { effectiveBudget } from "./budgets.js";
+import { bookCollection, currentBookId } from "../core/books/bookContext.js";
 import { linkedItems, liquidBalance } from "../integrations/plaid.js";
+import { effectiveBudget } from "./budgets.js";
 
-const stateRef = db.collection("savings").doc("state");
+const stateRef = () => bookCollection("savings").doc("state");
 
 export async function loadSavingsState(): Promise<SavingsState | null> {
-  const doc = await stateRef.get();
+  const doc = await stateRef().get();
   return doc.exists ? (doc.data() as SavingsState) : null;
 }
 
 export async function startSavings(startMonth: MonthYear): Promise<SavingsState> {
   const state = { startMonth };
-  await stateRef.set(state);
+  await stateRef().set(state);
   return state;
 }
 
@@ -40,13 +39,13 @@ export async function computeOpening(): Promise<SavingsState> {
   const state = await loadSavingsState();
   if (!state) throw new Error("Savings has no start month yet.");
   const { balance, accountIds } = await liquidBalance(linkedItems());
-  const since = await db.collection(LINE_ENTRIES_COLLECTION).where("date", ">=", `${state.startMonth}-01`).get();
+  const since = await bookCollection(LINE_ENTRIES_COLLECTION).where("date", ">=", `${state.startMonth}-01`).get();
   const movedSince = netPostedInflow(
     since.docs.map((doc) => doc.data() as LineEntryView),
     accountIds,
   );
   const next = { ...state, opening: { amount: balance - movedSince, balance, movedSince, computedAt: new Date() } };
-  await stateRef.set(next);
+  await stateRef().set(next);
   return next;
 }
 
@@ -54,7 +53,7 @@ export async function computeOpening(): Promise<SavingsState> {
 export async function ensureOpening(): Promise<boolean> {
   const state = await loadSavingsState();
   if (!state || state.opening || state.startMonth > toMonthYear()) return false;
-  if (!(await effectiveBudget(budgetUserId(), state.startMonth))) return false;
+  if (!(await effectiveBudget(currentBookId(), state.startMonth))) return false;
   await computeOpening();
   return true;
 }
@@ -62,9 +61,9 @@ export async function ensureOpening(): Promise<boolean> {
 export async function loadSavingsSummary(): Promise<SavingsSummary> {
   const [state, reports, allocations, goals] = await Promise.all([
     loadSavingsState(),
-    db.collection(MONTH_REPORTS_COLLECTION).get(),
-    db.collection(GOAL_ALLOCATIONS_COLLECTION).get(),
-    db.collection(GOALS_COLLECTION).get(),
+    bookCollection(MONTH_REPORTS_COLLECTION).get(),
+    bookCollection(GOAL_ALLOCATIONS_COLLECTION).get(),
+    bookCollection(GOALS_COLLECTION).get(),
   ]);
   return savingsSummary(
     state,

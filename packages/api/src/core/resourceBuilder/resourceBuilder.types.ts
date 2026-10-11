@@ -5,14 +5,14 @@ import type { FirestoreRepo } from "../firestore/firestoreRepo.js";
 
 // ── Permission levels ────────────────────────────────────
 //
-// Personal OS has one human, so the monorepo's per-domain PermissionMap
-// collapses to three levels:
+// Data lives in books, so levels are about the book the request names:
 //
-//   none   anonymous allowed (client may still be resolved if a token is sent)
-//   auth   any verified Firebase ID token, or the myos_ API key
-//   owner  the Firebase uid in MYOS_OWNER_UID, or the myos_ API key
+//   none       anonymous allowed (client may still be resolved if a token is sent)
+//   auth       any verified Firebase ID token, a book key or the system key
+//   owner      a member of the request's book, its book key, or the system key
+//   bookOwner  an owner of the request's book, or the system key
 
-export type Permission = "none" | "auth" | "owner";
+export type Permission = "none" | "auth" | "owner" | "bookOwner";
 
 // ── Endpoint configuration ───────────────────────────────
 

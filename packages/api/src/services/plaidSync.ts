@@ -10,7 +10,7 @@ import {
   type SyncPlan,
 } from "@myos/shared";
 import { db, FieldValue, Timestamp } from "../config/firebase.js";
-import { AppError } from "../core/errors/errors.js";
+import { bookCollection } from "../core/books/bookContext.js";
 import { linkedItems, syncTransactions, type PlaidItem } from "../integrations/plaid.js";
 import { autoLabel } from "./autoLabel.js";
 import { syncGoalSpends } from "./goals.js";
@@ -32,12 +32,12 @@ export type ItemSyncResult = {
 
 type ItemState = { cursor?: string; startedAt?: Timestamp };
 
-const lineEntries = db.collection(LINE_ENTRIES_COLLECTION);
-const plaidItems = db.collection(PLAID_ITEMS_COLLECTION);
+const lineEntries = () => bookCollection(LINE_ENTRIES_COLLECTION);
+const plaidItems = () => bookCollection(PLAID_ITEMS_COLLECTION);
 
 /** Claims the item so overlapping page loads don't run the same cursor twice. */
 async function claim(item: PlaidItem, now: Date): Promise<{ cursor?: string; previousStart?: Timestamp } | null> {
-  const ref = plaidItems.doc(item.itemId);
+  const ref = plaidItems().doc(item.itemId);
   return db.runTransaction(async (tx) => {
     const state = ((await tx.get(ref)).data() ?? {}) as ItemState;
     if (state.startedAt && now.getTime() - state.startedAt.toMillis() < MIN_SYNC_INTERVAL_MS) return null;
@@ -54,7 +54,7 @@ async function storedLabels(delta: PlaidSyncDelta): Promise<Map<string, LineEntr
   }
 
   const stored = new Map<string, LineEntryView>();
-  const refs = [...ids].map((id) => lineEntries.doc(id));
+  const refs = [...ids].map((id) => lineEntries().doc(id));
   for (let i = 0; i < refs.length; i += FIRESTORE_BATCH_LIMIT) {
     const docs = await db.getAll(...refs.slice(i, i + FIRESTORE_BATCH_LIMIT));
     for (const doc of docs) {
@@ -78,15 +78,15 @@ function goalFundedIds(plan: SyncPlan, stored: Map<string, LineEntryView>): stri
 async function applyPlan(plan: SyncPlan, now: Date): Promise<void> {
   const writes: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [
     ...plan.creates.map(({ id, ...view }) => (batch: FirebaseFirestore.WriteBatch) =>
-      batch.set(lineEntries.doc(id), { ...view, createdAt: now, updatedAt: now }),
+      batch.set(lineEntries().doc(id), { ...view, createdAt: now, updatedAt: now }),
     ),
     ...plan.updates.map(({ id, ...fields }) => (batch: FirebaseFirestore.WriteBatch) =>
-      batch.update(lineEntries.doc(id), { ...fields, updatedAt: now }),
+      batch.update(lineEntries().doc(id), { ...fields, updatedAt: now }),
     ),
     ...plan.removed.map((id) => (batch: FirebaseFirestore.WriteBatch) =>
-      batch.update(lineEntries.doc(id), { plaidStatus: PlaidTransactionStatus.REMOVED, updatedAt: now }),
+      batch.update(lineEntries().doc(id), { plaidStatus: PlaidTransactionStatus.REMOVED, updatedAt: now }),
     ),
-    ...plan.deletes.map((id) => (batch: FirebaseFirestore.WriteBatch) => batch.delete(lineEntries.doc(id))),
+    ...plan.deletes.map((id) => (batch: FirebaseFirestore.WriteBatch) => batch.delete(lineEntries().doc(id))),
   ];
 
   for (let i = 0; i < writes.length; i += FIRESTORE_BATCH_LIMIT) {
@@ -120,7 +120,7 @@ async function syncItem(item: PlaidItem): Promise<ItemSyncResult> {
     await syncGoalSpends(goalFundedIds(plan, stored));
     const labelled = await autoLabel(syncedEntries(plan, stored));
     // Cursor moves only after every write lands, so a crash replays the same delta
-    await plaidItems.doc(item.itemId).set({ cursor: nextCursor, syncedAt: now }, { merge: true });
+    await plaidItems().doc(item.itemId).set({ cursor: nextCursor, syncedAt: now }, { merge: true });
     return {
       ...result,
       created: plan.creates.length,
@@ -132,19 +132,12 @@ async function syncItem(item: PlaidItem): Promise<ItemSyncResult> {
       months: touchedMonths(plan, stored),
     };
   } catch (error) {
-    await plaidItems.doc(item.itemId).update({ startedAt: claimed.previousStart ?? FieldValue.delete() });
+    await plaidItems().doc(item.itemId).update({ startedAt: claimed.previousStart ?? FieldValue.delete() });
     throw error;
   }
 }
 
+// A book with no bank linked yet simply has nothing to sync
 export async function syncLinkedItems(): Promise<ItemSyncResult[]> {
-  const items = linkedItems();
-  if (items.length === 0) {
-    throw new AppError(
-      `No ${process.env.PLAID_ENV ?? "production"} bank linked. Run: python3 ~/.claude/skills/plaid/link_server.py <bank>`,
-      503,
-      "plaid_not_linked",
-    );
-  }
-  return Promise.all(items.map(syncItem));
+  return Promise.all(linkedItems().map(syncItem));
 }

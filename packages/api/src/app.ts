@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import { isProduction } from "./config/environment.js";
+import { bookScope } from "./core/resourceBuilder/resourceBuilder.auth.js";
 import { rateLimiter } from "./middleware/rateLimiter.js";
 import { router } from "./routes/index.js";
 
@@ -27,6 +28,7 @@ if (!isProduction()) {
 }
 
 app.use(rateLimiter);
+app.use(bookScope);
 
 app.get("/", (_req, res) => {
   res.status(200).send("OK");

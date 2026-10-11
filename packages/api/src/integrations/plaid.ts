@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { toCents, type Counterparty, type PlaidSyncDelta, type PlaidTransaction } from "@myos/shared";
+import { DEFAULT_BOOK, toCents, type Counterparty, type PlaidSyncDelta, type PlaidTransaction } from "@myos/shared";
+import { currentBookId } from "../core/books/bookContext.js";
 import { ServiceUpstreamError } from "../core/errors/errors.js";
 
 export type PlaidItem = { itemId: string; accessToken: string; institution: string };
 
-type StoredItem = { access_token?: string; item_id?: string; institution?: string; env?: string };
+type StoredItem = { access_token?: string; item_id?: string; institution?: string; env?: string; book?: string };
 
 type PlaidTransactionRow = {
   transaction_id: string;
@@ -56,11 +57,12 @@ function storedItems(): Record<string, StoredItem> {
   }
 }
 
-export function linkedItems(): PlaidItem[] {
+// Links made before books existed carry no book and belong to the personal one
+export function linkedItems(bookId = currentBookId()): PlaidItem[] {
   const items = storedItems();
 
   return Object.entries(items)
-    .filter(([, item]) => item.access_token && (item.env ?? "production") === plaidEnv())
+    .filter(([, item]) => item.access_token && (item.env ?? "production") === plaidEnv() && (item.book ?? DEFAULT_BOOK) === bookId)
     .map(([nickname, item]) => ({
       itemId: item.item_id ?? nickname,
       accessToken: item.access_token!,

@@ -1,16 +1,35 @@
 /**
- * Who is calling the API. Personal OS has exactly one human, so there is no
- * user document, no roles and no permission map — a request is either the
- * owner (Firebase ID token whose uid matches MYOS_OWNER_UID), a trusted
- * automation holding the `myos_` API key, or anonymous.
+ * Who is calling the API. A signed-in Google user is a MEMBER of the books
+ * that list their email; a book key acts inside the one book it was minted
+ * for; the system key (MYOS_API_KEY) is trusted automation across all books.
  */
 export enum PrincipalKind {
-  OWNER = "owner",
+  MEMBER = "member",
+  BOOK_KEY = "bookKey",
   API_KEY = "apiKey",
+}
+
+export enum BookRole {
+  OWNER = "owner",
+  MEMBER = "member",
 }
 
 export type Principal = {
   id: string;
   kind: PrincipalKind;
   email?: string;
+  bookId?: string;
+  role?: BookRole;
 };
+
+export type BookMember = { email: string; role: BookRole };
+
+export interface Book {
+  id: string;
+  name: string;
+  members: BookMember[];
+  memberEmails: string[]; // lowercased emails from members, for array-contains lookups
+  apiKeyHashes?: string[]; // sha256 of each book key; the keys themselves are shown once
+}
+
+export type BookView = Omit<Book, "apiKeyHashes"> & { role?: BookRole };

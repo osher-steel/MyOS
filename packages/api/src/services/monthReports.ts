@@ -10,26 +10,26 @@ import {
   type MonthYear,
 } from "@myos/shared";
 import { db } from "../config/firebase.js";
-import { budgetUserId } from "../domains/budgets/budgets.domain.js";
+import { currentBookId, bookCollection  } from "../core/books/bookContext.js";
 import type { MonthReportEntity } from "../domains/monthReports/monthReports.types.js";
 import { effectiveBudget } from "./budgets.js";
 
 const MAX_BACKFILL_MONTHS = 24;
 
-const lineEntries = db.collection(LINE_ENTRIES_COLLECTION);
-const reports = db.collection(MONTH_REPORTS_COLLECTION);
+const lineEntries = () => bookCollection(LINE_ENTRIES_COLLECTION);
+const reports = () => bookCollection(MONTH_REPORTS_COLLECTION);
 
 export async function generateMonthReport(monthYear: MonthYear): Promise<MonthReportEntity> {
-  const ownerUid = budgetUserId();
+  const ownerUid = currentBookId();
   const [budget, snapshot] = await Promise.all([
     effectiveBudget(ownerUid, monthYear),
-    lineEntries.where("monthYear", "==", monthYear).get(),
+    lineEntries().where("monthYear", "==", monthYear).get(),
   ]);
   const rows = snapshot.docs.map((doc) => ({ ...(doc.data() as LineEntryView), id: doc.id }));
 
   const record = { ...monthReport(monthYear, budget, rows), generatedAt: new Date() };
   const id = monthReportId(ownerUid, monthYear);
-  await reports.doc(id).set(record);
+  await reports().doc(id).set(record);
   return { ...record, id };
 }
 
@@ -41,17 +41,17 @@ export async function regeneratePastReports(months: Iterable<MonthYear>): Promis
 }
 
 export async function generateMissingReports(): Promise<MonthYear[]> {
-  const earliest = await lineEntries.orderBy("date").limit(1).get();
+  const earliest = await lineEntries().orderBy("date").limit(1).get();
   if (earliest.empty) return [];
 
-  const ownerUid = budgetUserId();
+  const ownerUid = currentBookId();
   const lastClosed = previousMonthYear(toMonthYear());
   const months = monthRange((earliest.docs[0]!.get("date") as string).slice(0, 7), lastClosed).slice(
     -MAX_BACKFILL_MONTHS,
   );
   if (months.length === 0) return [];
 
-  const existing = await db.getAll(...months.map((month) => reports.doc(monthReportId(ownerUid, month))));
+  const existing = await db.getAll(...months.map((month) => reports().doc(monthReportId(ownerUid, month))));
   const missing = months.filter((_, i) => !existing[i]!.exists);
   return regeneratePastReports(missing);
 }

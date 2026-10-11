@@ -6,3 +6,6 @@ export const GOALS_COLLECTION = "goals";
 export const GOAL_ALLOCATIONS_COLLECTION = "goalAllocations";
 export const LABEL_RULES_COLLECTION = "labelRules";
 export const TAGS_COLLECTION = "tags";
+export const BOOKS_COLLECTION = "books";
+export const BOOK_HEADER = "x-book";
+export const DEFAULT_BOOK = "personal";

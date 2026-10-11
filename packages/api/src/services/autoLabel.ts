@@ -16,6 +16,7 @@ import {
   type RuleMatcher,
 } from "@myos/shared";
 import { db, FieldValue } from "../config/firebase.js";
+import { bookCollection } from "../core/books/bookContext.js";
 import type { WriteChange } from "../core/resourceBuilder/resourceBuilder.types.js";
 import { FIRESTORE_IN_MAX } from "../validators/common.js";
 
@@ -26,13 +27,13 @@ type Write = (batch: FirebaseFirestore.WriteBatch) => void;
 const FIRESTORE_BATCH_LIMIT = 500;
 const PEER_FIELDS = ["merchantEntityId", "merchantName", "marketplace", "descriptionKey", "categoryDetailed"] as const;
 
-const lineEntries = db.collection(LINE_ENTRIES_COLLECTION);
-const labelRules = db.collection(LABEL_RULES_COLLECTION);
+const lineEntries = () => bookCollection(LINE_ENTRIES_COLLECTION);
+const labelRules = () => bookCollection(LABEL_RULES_COLLECTION);
 
 const toView = (doc: FirebaseFirestore.DocumentSnapshot) => ({ ...(doc.data() as LineEntryView), id: doc.id });
 
 async function loadRules(): Promise<RuleMatcher[]> {
-  const snapshot = await labelRules.get();
+  const snapshot = await labelRules().get();
   return snapshot.docs.map((doc) => ({ ...(doc.data() as RuleMatcher), id: doc.id }));
 }
 
@@ -42,7 +43,7 @@ async function loadPeers(entries: LineEntryView[]): Promise<LineEntryView[]> {
   for (const field of PEER_FIELDS) {
     const values = [...new Set(entries.map((entry) => entry[field]).filter((value): value is string => Boolean(value)))];
     for (let i = 0; i < values.length; i += FIRESTORE_IN_MAX) {
-      const snapshot = await lineEntries.where(field, "in", values.slice(i, i + FIRESTORE_IN_MAX)).get();
+      const snapshot = await lineEntries().where(field, "in", values.slice(i, i + FIRESTORE_IN_MAX)).get();
       for (const doc of snapshot.docs) peers.set(doc.id, toView(doc));
     }
   }
@@ -63,13 +64,13 @@ async function applyPlan(plan: AutoLabelPlan, existingRuleIds: Set<string>): Pro
   await commitInBatches(
     plan.learned.map(({ id, ...rule }) => (batch) =>
       existingRuleIds.has(id)
-        ? batch.update(labelRules.doc(id), {
+        ? batch.update(labelRules().doc(id), {
             ...(rule.label ? { label: rule.label } : {}),
             ...(rule.tags ? { tags: rule.tags } : {}),
             learnedFrom: rule.learnedFrom,
             updatedAt: now,
           })
-        : batch.set(labelRules.doc(id), { ...rule, matchCount: 0, createdAt: now, updatedAt: now }, { merge: true }),
+        : batch.set(labelRules().doc(id), { ...rule, matchCount: 0, createdAt: now, updatedAt: now }, { merge: true }),
     ),
   );
 
@@ -80,7 +81,7 @@ async function applyPlan(plan: AutoLabelPlan, existingRuleIds: Set<string>): Pro
 
   await commitInBatches([
     ...plan.assignments.map(({ id, ruleId, label }): Write => (batch) =>
-      batch.update(lineEntries.doc(id), {
+      batch.update(lineEntries().doc(id), {
         ...(label ? { label, osStatus: LineEntryStatus.LABELLED } : { osStatus: LineEntryStatus.EXCLUDED }),
         labelSource: LabelSource.RULE,
         ruleId,
@@ -88,7 +89,7 @@ async function applyPlan(plan: AutoLabelPlan, existingRuleIds: Set<string>): Pro
       }),
     ),
     ...plan.tagAssignments.map(({ id, tags }): Write => (batch) =>
-      batch.update(lineEntries.doc(id), {
+      batch.update(lineEntries().doc(id), {
         ...(tags.length
           ? { tags, tagSource: LabelSource.RULE }
           : { tags: FieldValue.delete(), tagSource: FieldValue.delete() }),
@@ -96,7 +97,7 @@ async function applyPlan(plan: AutoLabelPlan, existingRuleIds: Set<string>): Pro
       }),
     ),
     ...[...hits].map(([ruleId, count]): Write => (batch) =>
-      batch.update(labelRules.doc(ruleId), { matchCount: FieldValue.increment(count), lastMatchedAt: now }),
+      batch.update(labelRules().doc(ruleId), { matchCount: FieldValue.increment(count), lastMatchedAt: now }),
     ),
   ]);
 }
@@ -125,13 +126,13 @@ export async function autoLabel(candidates: LineEntryView[], { dryRun = false } 
 
 /** Every entry is both a candidate and history, so rule tags are recomputed everywhere. */
 export async function autoLabelAll({ dryRun = false }: { dryRun?: boolean } = {}): Promise<AutoLabelResult> {
-  const everything = (await lineEntries.get()).docs.map(toView);
+  const everything = (await lineEntries().get()).docs.map(toView);
   return run(everything, everything, dryRun);
 }
 
 /** Moves every entry a rule labelled to its new label. Hand-labelled entries keep theirs. */
 export async function relabelRuleEntries(ruleId: string, label: string): Promise<MonthYear[]> {
-  const snapshot = await lineEntries.where("ruleId", "==", ruleId).get();
+  const snapshot = await lineEntries().where("ruleId", "==", ruleId).get();
   const docs = snapshot.docs.filter((doc) => doc.get("labelSource") === LabelSource.RULE && doc.get("label") !== label);
   const now = new Date();
   await commitInBatches(docs.map((doc) => (batch) => batch.update(doc.ref, { label, osStatus: LineEntryStatus.LABELLED, updatedAt: now })));
@@ -139,7 +140,7 @@ export async function relabelRuleEntries(ruleId: string, label: string): Promise
 }
 
 async function correctRule(ruleId: string, correctedLabel: string | undefined): Promise<MonthYear[]> {
-  const doc = await labelRules.doc(ruleId).get();
+  const doc = await labelRules().doc(ruleId).get();
   if (!doc.exists) return [];
   const correction = ruleCorrection({ ...(doc.data() as RuleMatcher), id: doc.id }, correctedLabel);
   if (!correction) return [];

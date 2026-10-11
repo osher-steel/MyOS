@@ -1,17 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { budgetId, nextMonthYear, previousMonthYear, PrincipalKind, toMonthYear } from "@myos/shared";
+import { withBook } from "../../../src/core/books/bookContext.js";
 import { ServiceValidationError } from "../../../src/core/errors/errors.js";
 import {
   budgetDomain,
-  budgetUserId,
   buildBudgetCreateRecord,
   buildBudgetPatchRecord,
 } from "../../../src/domains/budgets/budgets.domain.js";
 import type { BudgetEntity } from "../../../src/domains/budgets/budgets.types.js";
 
-const owner = { id: "u123", kind: PrincipalKind.OWNER };
-const apiKey = { id: "system", kind: PrincipalKind.API_KEY };
+const member = { id: "u123", kind: PrincipalKind.MEMBER, bookId: "dibs" };
 const thisMonth = toMonthYear();
 const base = { income: 4000, needs: {}, wants: {}, savings: {} };
 
@@ -37,18 +36,13 @@ function existingFor(monthYear: string): BudgetEntity {
   };
 }
 
-test("budget id comes from the caller and the requested month", () => {
-  const id = budgetDomain.createId!({ ...base, monthYear: "2026-09" }, { client: owner });
-  assert.equal(id, "u123_2026-09");
+test("budget id comes from the request's book and the requested month", () => {
+  const id = withBook("dibs", () => budgetDomain.createId!({ ...base, monthYear: "2026-09" }, { client: member }));
+  assert.equal(id, "dibs_2026-09");
 });
 
-test("the API key files budgets under the configured owner", () => {
-  process.env.MYOS_OWNER_UID = "owner-uid";
-  assert.equal(budgetUserId(apiKey), "owner-uid");
-  assert.equal(budgetUserId(owner), "u123");
-
-  delete process.env.MYOS_OWNER_UID;
-  assert.throws(() => budgetUserId(apiKey), ServiceValidationError);
+test("a budget can't be filed without a book", () => {
+  assert.throws(() => budgetDomain.createId!({ ...base, monthYear: "2026-09" }, { client: member }), ServiceValidationError);
 });
 
 test("create stamps timestamps, keeps income, and drops monthYear from the record", () => {

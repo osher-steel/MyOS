@@ -12,7 +12,7 @@ import type {
 
 export const firestoreIndexRepo = new FirestoreRepo<
   FirestoreRepoTypeSet<FirestoreIndexEntity, FirestoreIndexRecord, FirestoreIndexQuery, FirestoreIndexPatch>
->(FIRESTORE_INDEX_REQUESTS_COLLECTION, firestoreIndexQueryFilterFields);
+>(FIRESTORE_INDEX_REQUESTS_COLLECTION, firestoreIndexQueryFilterFields, { scope: "global" });
 
 export const firestoreIndexDomain: DomainInner = {
   resourceName: "firestoreIndexRequest",

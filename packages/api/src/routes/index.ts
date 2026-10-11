@@ -1,11 +1,12 @@
 import { toMonthYear } from "@myos/shared";
 import { Router } from "express";
 import { z } from "zod";
+import { currentBookId } from "../core/books/bookContext.js";
 import { processError } from "../core/errors/errorResponses.js";
+import { ServiceNotFoundError } from "../core/errors/errors.js";
 import { resolvePermission } from "../core/resourceBuilder/resourceBuilder.auth.js";
 import { defineResource, parseOrThrow } from "../core/resourceBuilder/resourceBuilder.js";
-import { ServiceNotFoundError } from "../core/errors/errors.js";
-import { budgetDomain, budgetUserId } from "../domains/budgets/budgets.domain.js";
+import { budgetDomain } from "../domains/budgets/budgets.domain.js";
 import { monthYearSchema } from "../domains/budgets/budgets.schemas.js";
 import { firestoreIndexDomain } from "../domains/firestoreIndexes/firestoreIndexes.domain.js";
 import { goalAllocationDomain, reverseAllocation } from "../domains/goalAllocations/goalAllocations.domain.js";
@@ -18,14 +19,15 @@ import { lineEntryDomain } from "../domains/lineEntries/lineEntries.domain.js";
 import { monthReportDomain } from "../domains/monthReports/monthReports.domain.js";
 import { tagDomain } from "../domains/tags/tags.domain.js";
 import { autoLabelAll } from "../services/autoLabel.js";
-import { effectiveBudget } from "../services/budgets.js";
+import { booksFor, mintBookKey } from "../services/books.js";
 import { breakdownsBetween } from "../services/breakdowns.js";
+import { effectiveBudget } from "../services/budgets.js";
 import { businessSummary } from "../services/business.js";
-import { subscriptionsSummary } from "../services/subscriptions.js";
 import { completeGoal, transferBetweenGoals } from "../services/goals.js";
 import { refreshLedger } from "../services/ledgerRefresh.js";
 import { generateMonthReport } from "../services/monthReports.js";
 import { computeOpening, loadSavingsSummary, startSavings } from "../services/savings.js";
+import { subscriptionsSummary } from "../services/subscriptions.js";
 
 export const router = Router();
 
@@ -62,9 +64,9 @@ const budget = defineResource({
       method: "get",
       path: "/months/:monthYear",
       permission: "owner",
-      run: async ({ params, client }) => {
+      run: async ({ params }) => {
         const monthYear = parseOrThrow(monthYearSchema, params.monthYear, "month");
-        const found = await effectiveBudget(budgetUserId(client), monthYear);
+        const found = await effectiveBudget(currentBookId(), monthYear);
         if (!found) throw new ServiceNotFoundError(`No budget for ${monthYear} or any month before it.`);
         return { body: { data: found } };
       },
@@ -280,9 +282,34 @@ savings.post("/openings", async (req, res) => {
   }
 });
 
+// ── Books ─────────────────────────────────────────────────
+// Every other route acts inside the book named by X-Book. GET lists the
+// books the caller belongs to; POST /keys mints a key scoped to one book.
+
+const bookRoutes = Router();
+
+bookRoutes.get("/", async (req, res) => {
+  try {
+    const client = (await resolvePermission(req, "auth"))!;
+    res.json({ data: await booksFor(client) });
+  } catch (error) {
+    processError(res, error, "Failed to list books");
+  }
+});
+
+bookRoutes.post("/keys", async (req, res) => {
+  try {
+    await resolvePermission(req, "bookOwner");
+    res.status(201).json({ data: await mintBookKey() });
+  } catch (error) {
+    processError(res, error, "Failed to mint a book key");
+  }
+});
+
 // ── Mounts ────────────────────────────────────────────────
 // One line per resource. Add new domains above and mount them here.
 
+router.use("/books", bookRoutes);
 router.use("/budgets", budget.router);
 router.use("/firestore-index-requests", firestoreIndex.router);
 router.use("/goal-allocations", goalAllocation.router);

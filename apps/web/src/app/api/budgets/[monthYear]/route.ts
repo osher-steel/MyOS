@@ -1,7 +1,6 @@
 import { budgetId, isMonthYear, type Budget, type EffectiveBudget } from "@myos/shared";
 import { NextResponse } from "next/server";
-import { ApiError, apiFetch } from "@/lib/api";
-import { env } from "@/lib/env";
+import { ApiError, apiFetch, currentBook } from "@/lib/api";
 import { fromError, invalidMonth } from "@/lib/proxyResponses";
 
 /**
@@ -33,7 +32,7 @@ export async function PUT(req: Request, { params }: Params) {
   if (!isMonthYear(monthYear)) return invalidMonth();
 
   const draft: unknown = await req.json();
-  const id = budgetId(env("MYOS_OWNER_UID"), monthYear);
+  const id = budgetId(currentBook(), monthYear);
 
   try {
     const budget = await apiFetch<Budget>(`/budgets/${id}`, { method: "PATCH", body: JSON.stringify(draft) });

@@ -1,12 +1,12 @@
 import { budgetId, parseBudgetId, type EffectiveBudget, type MonthYear } from "@myos/shared";
-import { db, FieldPath } from "../config/firebase.js";
+import { FieldPath } from "../config/firebase.js";
+import { bookCollection } from "../core/books/bookContext.js";
 import { convertTimestampsToDates } from "../core/firestore/firestoreData.js";
 import type { BudgetEntity } from "../domains/budgets/budgets.types.js";
 
 /** A month without a budget of its own runs on the latest earlier one until it is edited. */
 export async function effectiveBudget(ownerUid: string, monthYear: MonthYear): Promise<(EffectiveBudget & BudgetEntity) | null> {
-  const snapshot = await db
-    .collection("budgets")
+  const snapshot = await bookCollection("budgets")
     .where(FieldPath.documentId(), ">=", `${ownerUid}_`)
     .where(FieldPath.documentId(), "<=", budgetId(ownerUid, monthYear))
     .get();

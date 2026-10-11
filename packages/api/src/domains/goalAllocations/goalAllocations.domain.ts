@@ -5,12 +5,12 @@ import {
   monthReportId,
   toMonthYear,
 } from "@myos/shared";
+import { currentBookId } from "../../core/books/bookContext.js";
 import { ServiceNotFoundError } from "../../core/errors/errors.js";
 import { FirestoreRepo, type FirestoreRepoTypeSet } from "../../core/firestore/firestoreRepo.js";
 import type { DomainInner, WriteChange } from "../../core/resourceBuilder/resourceBuilder.types.js";
 import { assignedIn, deleteTransfer, recomputeGoalBalances } from "../../services/goals.js";
 import { loadSavingsState, loadSavingsSummary } from "../../services/savings.js";
-import { budgetUserId } from "../budgets/budgets.domain.js";
 import { activeGoal, goalRulesError } from "../goals/goals.domain.js";
 import { monthReportRepo } from "../monthReports/monthReports.domain.js";
 import type { MonthReportEntity } from "../monthReports/monthReports.types.js";
@@ -34,7 +34,7 @@ async function monthRemaining(monthYear: string): Promise<number> {
   if (monthYear >= toMonthYear()) throw goalRulesError([`${monthYear} isn't finished yet.`]);
   let report: MonthReportEntity;
   try {
-    report = await monthReportRepo.get(monthReportId(budgetUserId(), monthYear));
+    report = await monthReportRepo.get(monthReportId(currentBookId(), monthYear));
   } catch (error) {
     if (error instanceof ServiceNotFoundError) throw goalRulesError([`${monthYear} has no report yet.`]);
     throw error;
