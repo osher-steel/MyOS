@@ -10,4 +10,5 @@ export * from "./lineEntries.js";
 export * from "./money.js";
 export * from "./monthReport.js";
 export * from "./monthYear.js";
+export * from "./subscriptions.js";
 export * from "./tags.js";

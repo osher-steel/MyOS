@@ -1,10 +1,11 @@
 import Link from "next/link";
 
-export type Tab = "home" | "reports" | "goals" | "settings";
+export type Tab = "home" | "reports" | "subscriptions" | "goals" | "settings";
 
 const TABS: Array<{ id: Tab; label: string; short?: string; href: string }> = [
   { id: "home", label: "Home", href: "/" },
   { id: "reports", label: "Monthly Reports", short: "Reports", href: "/reports" },
+  { id: "subscriptions", label: "Subscriptions", short: "Subs", href: "/subscriptions" },
   { id: "goals", label: "Goals", href: "/goals" },
   { id: "settings", label: "Settings", href: "/settings" },
 ];
