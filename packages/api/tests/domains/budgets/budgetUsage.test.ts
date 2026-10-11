@@ -41,7 +41,16 @@ test("savings never goes below zero", () => {
   assert.equal(byGroup(usage, BudgetGroup.SAVINGS).used, 0);
 });
 
-test("at close, underspend flows into savings", () => {
-  const usage = budgetUsage(budget, { Rent: 1500, Groceries: 350 }, { closing: true });
-  assert.equal(byGroup(usage, BudgetGroup.SAVINGS).used, 1250);
+test("given entry, savings is what entry left after spending, not the plan plus underspend", () => {
+  const usage = budgetUsage(budget, { Rent: 1500, Groceries: 350 }, { entry: 2500 });
+  const savings = byGroup(usage, BudgetGroup.SAVINGS);
+  assert.equal(savings.used, 650);
+  assert.deepEqual(savings.categories.map((c) => c.used), [390, 260]);
+});
+
+test("given entry below spending, savings goes negative and no category keeps anything", () => {
+  const usage = budgetUsage(budget, { Rent: 1500, Groceries: 350 }, { entry: 1600 });
+  const savings = byGroup(usage, BudgetGroup.SAVINGS);
+  assert.equal(savings.used, -250);
+  assert.deepEqual(savings.categories.map((c) => c.used), [0, 0]);
 });

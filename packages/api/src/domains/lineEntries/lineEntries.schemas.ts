@@ -34,6 +34,7 @@ export const lineEntryPatchSchema = z
     label,
     goalId: nonEmptyString,
     tags,
+    bookedMonth: monthYearSchema.nullable(),
     plaidStatus: z.enum(PlaidTransactionStatus),
     osStatus: z.enum(LineEntryStatus),
   })
@@ -51,6 +52,7 @@ export const lineEntryRecordSchema = z
     amount: z.number().int(),
     date: dayDate,
     monthYear: monthYearSchema,
+    bookedMonth: monthYearSchema.optional(),
     currency,
     label: label.optional(),
     goalId: nonEmptyString.optional(),

@@ -32,35 +32,33 @@ function spendingUsage(budget: Budget, group: BudgetGroup, usedByLabel: Record<s
   };
 }
 
-/**
- * Savings is what is left, not what was spent: it starts at its allocation and
- * moves by the spending variance, shared across its categories in proportion
- * to their allocation, never below zero.
- */
-function savingsUsage(budget: Budget, delta: number): GroupUsage {
+// A negative total stays on the group so the deficit shows; categories only split what was kept
+function savingsUsage(budget: Budget, used: number): GroupUsage {
   const entries = Object.entries(budget[BudgetGroup.SAVINGS]);
   const allocated = sum(entries.map(([, amount]) => amount));
-  const kept = Math.max(0, allocated + delta);
-  const shares = splitProportionally(kept, entries.map(([, amount]) => amount));
+  const shares = splitProportionally(Math.max(0, used), entries.map(([, amount]) => amount));
   const categories = entries.map(([name, amount], i) => ({ name, allocated: amount, used: shares[i]! }));
-  return { group: BudgetGroup.SAVINGS, categories, used: kept, allocated };
+  return { group: BudgetGroup.SAVINGS, categories, used, allocated };
 }
 
 /**
  * Unlabelled spending still left the account, so it counts against the
- * spending allocation. Mid-month only overspend touches savings; at close
- * (`closing`) underspend flows into it too.
+ * spending allocation. Without `entry` savings is projected: the allocation,
+ * reduced by any overspend. With it savings is what is actually left over,
+ * entry minus spending, and goes negative when spending outran entry.
  */
 export function budgetUsage(
   budget: Budget,
   usedByLabel: Record<string, number>,
-  { unlabelledSpent = 0, closing = false }: { unlabelledSpent?: number; closing?: boolean } = {},
+  { unlabelledSpent = 0, entry }: { unlabelledSpent?: number; entry?: number } = {},
 ): BudgetUsage {
   const spending = SPENDING_GROUPS.map((group) => spendingUsage(budget, group, usedByLabel));
   const spendingAllocated = sum(spending.map((g) => g.allocated));
   const spendingUsed = sum(spending.map((g) => g.used)) + unlabelledSpent;
   const variance = spendingAllocated - spendingUsed;
-  const groups = [...spending, savingsUsage(budget, closing ? variance : Math.min(0, variance))];
+  const savingsAllocated = sum(Object.values(budget[BudgetGroup.SAVINGS]));
+  const saved = entry === undefined ? Math.max(0, savingsAllocated + Math.min(0, variance)) : entry - spendingUsed;
+  const groups = [...spending, savingsUsage(budget, saved)];
   const allocated = sum(groups.map((g) => g.allocated));
   return {
     income: budget.income,

@@ -1,6 +1,8 @@
 import {
-  budgetId,
   GOAL_ALLOCATIONS_COLLECTION,
+  LINE_ENTRIES_COLLECTION,
+  PlaidTransactionStatus,
+  type LineEntryView,
   GOALS_COLLECTION,
   MONTH_REPORTS_COLLECTION,
   savingsSummary,
@@ -12,9 +14,8 @@ import {
   type StoredMonthReport,
 } from "@myos/shared";
 import { db } from "../config/firebase.js";
-import { budgetRepo, budgetUserId } from "../domains/budgets/budgets.domain.js";
-import { totalAllocated } from "../domains/budgets/budgets.schemas.js";
-import type { BudgetEntity } from "../domains/budgets/budgets.types.js";
+import { budgetUserId } from "../domains/budgets/budgets.domain.js";
+import { effectiveBudget } from "./budgets.js";
 import { linkedItems, liquidBalance } from "../integrations/plaid.js";
 
 const stateRef = db.collection("savings").doc("state");
@@ -31,16 +32,22 @@ export async function startSavings(startMonth: MonthYear): Promise<SavingsState>
 }
 
 /**
- * Opening savings is what the linked accounts hold minus everything the start
- * month's budget allocates, i.e. money that was already there before the plan.
+ * Opening savings is what the liquid accounts held as the start month began:
+ * today's balance with every posted movement on them since then undone. Each
+ * month's result then adds entry minus spending on top. Plaid's `current`
+ * balance excludes pending, so only posted rows are undone; excluded rows
+ * count because transfers out still left the account.
  */
 export async function computeOpening(): Promise<SavingsState> {
   const state = await loadSavingsState();
   if (!state) throw new Error("Savings has no start month yet.");
-  const budget = (await budgetRepo.get(budgetId(budgetUserId(), state.startMonth))) as BudgetEntity;
-  const balance = await liquidBalance(linkedItems());
-  const allocated = totalAllocated(budget);
-  const next = { ...state, opening: { amount: balance - allocated, balance, allocated, computedAt: new Date() } };
+  const { balance, accountIds } = await liquidBalance(linkedItems());
+  const since = await db.collection(LINE_ENTRIES_COLLECTION).where("date", ">=", `${state.startMonth}-01`).get();
+  const movedSince = since.docs
+    .map((doc) => doc.data() as LineEntryView)
+    .filter((entry) => entry.plaidStatus === PlaidTransactionStatus.POSTED && entry.accountId && accountIds.has(entry.accountId))
+    .reduce((sum, entry) => sum - entry.amount, 0);
+  const next = { ...state, opening: { amount: balance - movedSince, balance, movedSince, computedAt: new Date() } };
   await stateRef.set(next);
   return next;
 }
@@ -49,8 +56,7 @@ export async function computeOpening(): Promise<SavingsState> {
 export async function ensureOpening(): Promise<boolean> {
   const state = await loadSavingsState();
   if (!state || state.opening || state.startMonth > toMonthYear()) return false;
-  const budget = await db.collection("budgets").doc(budgetId(budgetUserId(), state.startMonth)).get();
-  if (!budget.exists) return false;
+  if (!(await effectiveBudget(budgetUserId(), state.startMonth))) return false;
   await computeOpening();
   return true;
 }

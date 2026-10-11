@@ -73,12 +73,12 @@ export default function HomeView() {
           loading={{ budget: budget.loading, ledger: transactions.loading }}
         />
 
-        <div className="grid grid-cols-1 gap-x-[var(--gutter)] gap-y-12 pt-3 md:grid-cols-[minmax(0,657fr)_minmax(0,459fr)]">
-          <TransactionsPanel {...transactions} />
+        <div className="grid grid-cols-1 gap-x-[var(--gutter)] gap-y-12 pt-3 md:grid-cols-[minmax(0,459fr)_minmax(0,657fr)]">
           <div className="flex flex-col gap-12">
             <BudgetPanel {...budget} />
             <RecentMonthsChart {...history} />
           </div>
+          <TransactionsPanel {...transactions} />
         </div>
       </div>
 

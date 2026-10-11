@@ -1,8 +1,16 @@
 "use client";
 
-import { BudgetGroup, toMonthYear, type Budget, type MonthYear } from "@myos/shared";
-import { useEffect, useState } from "react";
-import { BudgetClientError, fetchBudget, saveBudget, type BudgetDraft } from "@/lib/budgetsClient";
+import {
+  BudgetGroup,
+  budgetSuggestions,
+  toMonthYear,
+  type Budget,
+  type CategorySuggestion,
+  type EffectiveBudget,
+  type MonthYear,
+} from "@myos/shared";
+import { useEffect, useMemo, useState } from "react";
+import { BudgetClientError, fetchBudget, fetchBudgets, saveBudget, type BudgetDraft } from "@/lib/budgetsClient";
 
 export type EditErrors = Record<BudgetGroup | "income" | "main", string | null>;
 
@@ -13,7 +21,7 @@ export const DEFAULT_SAVINGS = "Savings";
 
 const EMPTY_DRAFT: BudgetDraft = { income: 0, needs: {}, wants: {}, savings: { [DEFAULT_SAVINGS]: 0 } };
 
-type Loaded = { monthYear: MonthYear; existing: Budget | null; error: string | null };
+type Loaded = { monthYear: MonthYear; existing: EffectiveBudget | null; error: string | null };
 
 function toDraft(budget: Budget | null): BudgetDraft {
   if (!budget) return EMPTY_DRAFT;
@@ -67,6 +75,30 @@ export function useFinanceEdit(monthYear: MonthYear) {
   const [errors, setErrors] = useState<EditErrors>(NO_ERRORS);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [history, setHistory] = useState<Budget[]>([]);
+
+  useEffect(() => {
+    let ignore = false;
+    fetchBudgets()
+      .then((budgets) => {
+        if (!ignore) setHistory(budgets);
+      })
+      .catch(() => {});
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const suggestions = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.values(BudgetGroup).map((group) => [
+          group,
+          budgetSuggestions(history, group).filter(({ name }) => !(name in draft[group])),
+        ]),
+      ) as Record<BudgetGroup, CategorySuggestion[]>,
+    [history, draft],
+  );
 
   useEffect(() => {
     let ignore = false;
@@ -184,7 +216,9 @@ export function useFinanceEdit(monthYear: MonthYear) {
     loadError: current?.error ?? null,
     /** null once loaded means this save will create the month. */
     existing: current?.existing ?? null,
+    carriedFrom: current?.existing?.carriedFrom ?? null,
     draft,
+    suggestions,
     splitSavings,
     errors,
     saving,

@@ -202,3 +202,28 @@ test("labelling with a goal clears the category label and the reverse", () => {
   assert.ok("goalId" in toLabel);
   assert.equal(lineEntryPatchSchema.safeParse({ label: "Rent", goalId: "g_car" }).success, false);
 });
+
+test("a booked month moves the entry's month, and booking its date's month clears the override", () => {
+  const entry = { date: "2026-11-02" };
+  const booked = buildLineEntryPatchRecord(lineEntryPatchSchema.parse({ bookedMonth: "2026-10" }), entry);
+  assert.deepEqual([booked.bookedMonth, booked.monthYear], ["2026-10", "2026-10"]);
+  for (const bookedMonth of [null, "2026-11"]) {
+    const cleared = buildLineEntryPatchRecord(lineEntryPatchSchema.parse({ bookedMonth }), entry);
+    assert.equal(cleared.monthYear, "2026-11");
+    assert.notEqual(cleared.bookedMonth, undefined);
+  }
+  assert.equal(lineEntryPatchSchema.safeParse({ bookedMonth: "October" }).success, false);
+});
+
+test("sync keeps a booked month on updates and carries it from a pending row to the posted one", () => {
+  const booked = stored({ id: "pay_1", date: "2026-11-01", monthYear: "2026-10", bookedMonth: "2026-10" });
+  const update = planSync(delta({ modified: [live({ id: "pay_1", date: "2026-11-01", amount: -300000 })] }), storedMap(booked));
+  assert.equal(update.updates[0]!.monthYear, "2026-10");
+
+  const pending = stored({ ...booked, id: "pend_pay", plaidStatus: PlaidTransactionStatus.PENDING });
+  const settle = planSync(
+    delta({ added: [live({ id: "post_pay", date: "2026-11-02", pendingTransactionId: "pend_pay" })] }),
+    storedMap(pending),
+  );
+  assert.deepEqual([settle.creates[0]!.monthYear, settle.creates[0]!.bookedMonth], ["2026-10", "2026-10"]);
+});

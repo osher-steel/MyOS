@@ -1,8 +1,9 @@
 "use client";
 
-import { BudgetGroup, formatMonthYear, type MonthReport, type MonthYear } from "@myos/shared";
+import { BudgetGroup, formatMonthYear, type Goal, type MonthReport, type MonthYear } from "@myos/shared";
 import { Section } from "@/components/editorial";
 import { money, reportSummary } from "@/lib/format";
+import AssignSavings from "./AssignSavings";
 
 const GROUP_LABELS: Record<BudgetGroup, string> = {
   [BudgetGroup.NEEDS]: "Needs",
@@ -19,19 +20,43 @@ function Stat({ label, value, muted }: { label: string; value: string; muted?: b
   );
 }
 
+function openItems(report: MonthReport, savingsRemaining: number | null): string[] {
+  const items: string[] = [];
+  if (savingsRemaining !== null && savingsRemaining > 0) items.push(`assign ${money(savingsRemaining)} to goals`);
+  if (savingsRemaining !== null && savingsRemaining < 0) items.push(`take ${money(-savingsRemaining)} out of goals`);
+  if (report.unlabelledCount > 0) {
+    items.push(`label ${report.unlabelledCount} ${report.unlabelledCount === 1 ? "entry" : "entries"}`);
+  }
+  return items;
+}
+
 export default function ReportPanel({
   monthYear,
   report,
   inProgress,
+  savingsRemaining,
+  goals,
+  onAssigned,
+  regenerate,
+  regenerating,
+  regenerateError,
   loading,
 }: {
   monthYear: MonthYear;
   report: MonthReport;
   inProgress: boolean;
+  savingsRemaining: number | null;
+  goals: Goal[];
+  onAssigned: () => void;
+  regenerate: () => void;
+  regenerating: boolean;
+  regenerateError: string | null;
   loading: boolean;
 }) {
+  const open = inProgress || !report.hasBudget ? [] : openItems(report, savingsRemaining);
+  const status = inProgress ? "in progress" : open.length > 0 ? "pending" : "closed";
   return (
-    <Section label={`Report · ${formatMonthYear(monthYear)}`} aside={inProgress ? "in progress" : "closed"}>
+    <Section label={`Report · ${formatMonthYear(monthYear)}`} aside={status}>
       {loading ? (
         <p className="entry-meta">Loading…</p>
       ) : (
@@ -68,6 +93,28 @@ export default function ReportPanel({
           ) : null}
 
           <p className="entry-title">{reportSummary(report, inProgress)}</p>
+          {open.length > 0 ? (
+            <p className="entry-meta">
+              To close: {open.join(", ")}.
+            </p>
+          ) : null}
+          {!inProgress && savingsRemaining ? (
+            <AssignSavings
+              key={savingsRemaining}
+              monthYear={monthYear}
+              remaining={savingsRemaining}
+              goals={goals}
+              onAssigned={onAssigned}
+            />
+          ) : null}
+          {inProgress ? null : (
+            <p className="entry-meta">
+              <button type="button" className="text-ink hover:text-accent disabled:opacity-40" disabled={regenerating} onClick={regenerate}>
+                {regenerating ? "regenerating…" : "regenerate report ↻"}
+              </button>
+              {regenerateError ? <span className="text-accent ml-3">{regenerateError}</span> : null}
+            </p>
+          )}
         </div>
       )}
     </Section>

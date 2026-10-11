@@ -1,6 +1,15 @@
 "use client";
 
-import { LabelSource, labelSourceOf, PlaidTransactionStatus, type Budget, type LineEntry, type LineEntryView } from "@myos/shared";
+import {
+  formatMonthYear,
+  LabelSource,
+  labelSourceOf,
+  PlaidTransactionStatus,
+  type Budget,
+  type LineEntry,
+  type LineEntryView,
+  type MonthYear,
+} from "@myos/shared";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, type ReactNode } from "react";
@@ -49,6 +58,7 @@ export default function TransactionCard({
   onClose,
   onLabel,
   onTags,
+  onBook,
 }: {
   entry: CardEntry;
   budget: Budget | null;
@@ -56,6 +66,7 @@ export default function TransactionCard({
   onClose: () => void;
   onLabel: (entry: LineEntryView, label: string) => void;
   onTags: (entry: LineEntryView, tags: string[]) => void;
+  onBook: (entry: LineEntryView, bookedMonth: MonthYear | null) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
 
@@ -129,6 +140,23 @@ export default function TransactionCard({
               )}
             </Row>
           ) : null}
+          <Row label="Booked to">
+            <input
+              type="month"
+              className="figure bg-transparent"
+              value={entry.monthYear}
+              onChange={(event) => {
+                if (event.target.value && event.target.value !== entry.monthYear) onBook(entry, event.target.value);
+              }}
+            />
+            {entry.bookedMonth ? (
+              <button type="button" className="entry-meta ml-3 hover:text-accent" onClick={() => onBook(entry, null)}>
+                back to {formatMonthYear(entry.date.slice(0, 7))}
+              </button>
+            ) : (
+              <span className="entry-meta block">the month this counts toward; defaults to the date</span>
+            )}
+          </Row>
           <Row label="Tags">
             <TagEditor entry={entry} vocabulary={vocabulary} onTags={onTags} />
             {entry.tags?.length && entry.tagSource === LabelSource.RULE ? (

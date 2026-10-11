@@ -1,6 +1,13 @@
 "use client";
 
-import { BudgetGroup, formatMonthYear, toMonthYear, type BudgetAllocations, type MonthYear } from "@myos/shared";
+import {
+  BudgetGroup,
+  formatMonthYear,
+  toMonthYear,
+  type BudgetAllocations,
+  type CategorySuggestion,
+  type MonthYear,
+} from "@myos/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -28,12 +35,14 @@ function Field({ message }: { message: string | null }) {
 function GroupEditor({
   label,
   allocations,
+  suggestions,
   error,
   onChange,
   onRemove,
 }: {
   label: string;
   allocations: BudgetAllocations;
+  suggestions: CategorySuggestion[];
   error: string | null;
   onChange: (name: string, amount: number) => void;
   onRemove: (name: string) => void;
@@ -87,6 +96,22 @@ function GroupEditor({
           add
         </button>
       </form>
+      {suggestions.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+          {suggestions.map(({ name, amount }) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => onChange(name, amount)}
+              className="entry-meta hover:text-ink"
+              aria-label={`Add ${name}${amount ? ` at ${money(amount)}` : ""}`}
+            >
+              + {name}
+              {amount ? <span className="text-muted"> {money(amount)}</span> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <Field message={error} />
     </Section>
   );
@@ -123,7 +148,13 @@ export default function BudgetEditor({ monthYear }: { monthYear: MonthYear }) {
       <div className="flex items-baseline justify-between gap-4">
         <h2 className="entry-title">
           {formatMonthYear(monthYear)}
-          <span className="entry-meta ml-3">{edit.existing ? "editing" : "new budget"}</span>
+          <span className="entry-meta ml-3">
+            {edit.carriedFrom
+              ? `same as ${formatMonthYear(edit.carriedFrom)}; saving makes it this month's own`
+              : edit.existing
+                ? "editing"
+                : "new budget"}
+          </span>
         </h2>
         <span className="entry-meta">
           {edit.splitSavings ? `${money(unplaced)} unallocated` : `${money(remainder)} to savings`}
@@ -151,6 +182,7 @@ export default function BudgetEditor({ monthYear }: { monthYear: MonthYear }) {
           key={id}
           label={label}
           allocations={edit.draft[id]}
+          suggestions={edit.suggestions[id]}
           error={edit.errors[id]}
           onChange={(name, amount) => edit.setAllocation(id, name, amount)}
           onRemove={(name) => edit.removeAllocation(id, name)}
@@ -161,6 +193,7 @@ export default function BudgetEditor({ monthYear }: { monthYear: MonthYear }) {
         <GroupEditor
           label="Savings"
           allocations={edit.draft.savings}
+          suggestions={edit.suggestions[BudgetGroup.SAVINGS]}
           error={edit.errors.savings}
           onChange={(name, amount) => edit.setAllocation(BudgetGroup.SAVINGS, name, amount)}
           onRemove={(name) => edit.removeAllocation(BudgetGroup.SAVINGS, name)}

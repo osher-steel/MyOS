@@ -5,8 +5,8 @@ import { budgetUsage, type GroupUsage } from "./budgetUsage.js";
 import { groupLineEntries, totalLineEntries } from "./lineEntries.js";
 
 export enum MonthOutcome {
-  UNDER = "under",
-  OVER = "over",
+  AHEAD = "ahead",
+  SHORT = "short",
   DEFICIT = "deficit",
 }
 
@@ -15,6 +15,7 @@ export interface MonthReport {
   hasBudget: boolean;
   incomeBudgeted: number;
   entry: number;
+  projected: boolean;
   incomeShortfall: number;
   allocated: number;
   spent: number;
@@ -27,7 +28,6 @@ export interface MonthReport {
   variance: number;
   savingsPlanned: number;
   savingsActual: number;
-  balanceDeduction: number;
   savingsResult: number;
   goalSpent: number;
   groups: GroupUsage[];
@@ -38,14 +38,24 @@ export type StoredMonthReport = MonthReport & { id: string; generatedAt: FireTim
 
 export { budgetId as monthReportId } from "./budgetId.js";
 
-/** Every inflow is entry and every outflow is spent; labels on credits only say where income came from. */
-export function monthReport(monthYear: MonthYear, budget: Budget | null, rows: LineEntryView[]): MonthReport {
+/**
+ * Every inflow is entry and every outflow is spent; labels on credits only say
+ * where income came from. A `projected` month counts income that hasn't landed
+ * yet: savings is figured from the budgeted income until entry passes it.
+ */
+export function monthReport(
+  monthYear: MonthYear,
+  budget: Budget | null,
+  rows: LineEntryView[],
+  { projected = false }: { projected?: boolean } = {},
+): MonthReport {
   const groups = groupLineEntries(rows);
   const totals = totalLineEntries(groups);
   const entry = groups.all.reduce((total, row) => total + Math.max(-row.amount, 0), 0);
   const base = {
     monthYear,
     entry,
+    projected,
     spent: totals.spent,
     unlabelledSpent: totals.spentUnlabelled,
     unlabelledCount: groups.unlabelled.length,
@@ -66,16 +76,15 @@ export function monthReport(monthYear: MonthYear, budget: Budget | null, rows: L
       variance: 0,
       savingsPlanned: 0,
       savingsActual: 0,
-      balanceDeduction: 0,
       savingsResult: 0,
       groups: [],
       outcome: null,
     };
   }
 
-  const usage = budgetUsage(budget, totals.usedByLabel, { unlabelledSpent: totals.spentUnlabelled, closing: true });
+  const expectedEntry = projected ? Math.max(entry, budget.income) : entry;
+  const usage = budgetUsage(budget, totals.usedByLabel, { unlabelledSpent: totals.spentUnlabelled, entry: expectedEntry });
   const savings = usage.groups.find((g) => g.group === BudgetGroup.SAVINGS)!;
-  const balanceDeduction = Math.max(0, -(savings.allocated + usage.variance));
 
   return {
     ...base,
@@ -88,10 +97,9 @@ export function monthReport(monthYear: MonthYear, budget: Budget | null, rows: L
     variance: usage.variance,
     savingsPlanned: savings.allocated,
     savingsActual: savings.used,
-    balanceDeduction,
-    savingsResult: savings.allocated + usage.variance,
+    savingsResult: savings.used,
     groups: usage.groups,
     outcome:
-      usage.variance >= 0 ? MonthOutcome.UNDER : balanceDeduction > 0 ? MonthOutcome.DEFICIT : MonthOutcome.OVER,
+      savings.used < 0 ? MonthOutcome.DEFICIT : savings.used >= savings.allocated ? MonthOutcome.AHEAD : MonthOutcome.SHORT,
   };
 }

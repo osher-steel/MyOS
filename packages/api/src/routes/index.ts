@@ -4,7 +4,8 @@ import { z } from "zod";
 import { processError } from "../core/errors/errorResponses.js";
 import { resolvePermission } from "../core/resourceBuilder/resourceBuilder.auth.js";
 import { defineResource, parseOrThrow } from "../core/resourceBuilder/resourceBuilder.js";
-import { budgetDomain } from "../domains/budgets/budgets.domain.js";
+import { ServiceNotFoundError } from "../core/errors/errors.js";
+import { budgetDomain, budgetUserId } from "../domains/budgets/budgets.domain.js";
 import { monthYearSchema } from "../domains/budgets/budgets.schemas.js";
 import { firestoreIndexDomain } from "../domains/firestoreIndexes/firestoreIndexes.domain.js";
 import { goalAllocationDomain, reverseAllocation } from "../domains/goalAllocations/goalAllocations.domain.js";
@@ -17,6 +18,7 @@ import { lineEntryDomain } from "../domains/lineEntries/lineEntries.domain.js";
 import { monthReportDomain } from "../domains/monthReports/monthReports.domain.js";
 import { tagDomain } from "../domains/tags/tags.domain.js";
 import { autoLabelAll } from "../services/autoLabel.js";
+import { effectiveBudget } from "../services/budgets.js";
 import { breakdownsBetween } from "../services/breakdowns.js";
 import { completeGoal, transferBetweenGoals } from "../services/goals.js";
 import { refreshLedger } from "../services/ledgerRefresh.js";
@@ -52,6 +54,19 @@ const budget = defineResource({
     create: { permission: "owner" },
     patch: { permission: "owner" },
     delete: { permission: "owner" },
+  },
+  actions: {
+    effective: {
+      method: "get",
+      path: "/months/:monthYear",
+      permission: "owner",
+      run: async ({ params, client }) => {
+        const monthYear = parseOrThrow(monthYearSchema, params.monthYear, "month");
+        const found = await effectiveBudget(budgetUserId(client), monthYear);
+        if (!found) throw new ServiceNotFoundError(`No budget for ${monthYear} or any month before it.`);
+        return { body: { data: found } };
+      },
+    },
   },
 });
 

@@ -1,4 +1,5 @@
 import {
+  formatMonthYear,
   LabelSource,
   labelSourceOf,
   MonthOutcome,
@@ -34,6 +35,7 @@ export function clock(iso: string): string {
 export function transactionMeta(entry: LineEntryView): string {
   const parts = [day(entry.date)];
   if (entry.plaidStatus === PlaidTransactionStatus.PENDING) parts.push("pending");
+  if (entry.bookedMonth) parts.push(`booked to ${formatMonthYear(entry.bookedMonth)}`);
   if (labelSourceOf(entry) === LabelSource.RULE) parts.push("auto-labelled");
   return parts.join(" · ");
 }
@@ -45,29 +47,33 @@ export function daysLeftInMonth(now = new Date()): number {
 export function reportSummary(report: MonthReport, inProgress: boolean): string {
   if (!report.hasBudget) return "No budget for this month.";
   const parts: string[] = [];
-  const prefix = inProgress ? "So far: " : "";
+  const saved = report.projected ? "On track to save" : "Saved";
+  if (report.variance === 0) parts.push("spending landed exactly on target.");
+  else if (report.variance > 0) parts.push(`spending came in ${money(report.variance)} under target.`);
+  else parts.push(`spending went ${money(-report.variance)} over target.`);
+
   switch (report.outcome) {
-    case MonthOutcome.UNDER: {
-      if (report.variance === 0) {
-        parts.push(`${prefix}allocated perfectly, nothing surpassed.`);
-      } else {
-        const extra = report.savingsPlanned > 0 ? `, adding ${Math.round((report.variance / report.savingsPlanned) * 100)}% extra to savings` : "";
-        parts.push(`${prefix}under allocation by ${money(report.variance)}${extra}.`);
-      }
+    case MonthOutcome.AHEAD:
+      parts.push(
+        report.savingsResult === report.savingsPlanned
+          ? `${saved} ${money(report.savingsResult)}, as planned.`
+          : `${saved} ${money(report.savingsResult)}, ${money(report.savingsResult - report.savingsPlanned)} more than planned.`,
+      );
       break;
-    }
-    case MonthOutcome.OVER:
-      parts.push(`${prefix}went over allocation by ${money(-report.variance)}, taken out of savings.`);
+    case MonthOutcome.SHORT:
+      parts.push(`${saved} ${money(report.savingsResult)} of the ${money(report.savingsPlanned)} planned.`);
       break;
     case MonthOutcome.DEFICIT:
-      parts.push(
-        `${prefix}went far over allocation: no savings this month, and the balance was deducted by ${money(report.balanceDeduction)}.`,
-      );
+      parts.push(`Spending ${report.projected ? "is set to outrun" : "outran"} entry by ${money(-report.savingsResult)}, which comes out of your goals.`);
       break;
   }
   if (report.incomeShortfall > 0) {
-    parts.push(`Entry fell ${money(report.incomeShortfall)} short of the budgeted income.`);
+    parts.push(
+      report.projected
+        ? `That counts ${money(report.incomeShortfall)} of budgeted income still to come.`
+        : `Entry fell ${money(report.incomeShortfall)} short of the budgeted income.`,
+    );
   }
-  const text = parts.join(" ");
+  const text = (inProgress ? "So far, " : "") + parts.join(" ");
   return text.charAt(0).toUpperCase() + text.slice(1);
 }

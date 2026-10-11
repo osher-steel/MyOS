@@ -21,6 +21,8 @@ export interface Budget {
   savings: BudgetAllocations;
 }
 
+export type EffectiveBudget = Budget & { carriedFrom?: MonthYear };
+
 export enum PlaidTransactionStatus {
   PENDING = "pending",
   POSTED = "posted",
@@ -85,7 +87,8 @@ export interface LineEntry extends PlaidDetails {
   name: string;
   amount: number; // cents, Plaid sign: positive is money out
   date: ISODateString; // YYYY-MM-DD
-  monthYear: MonthYear;
+  monthYear: MonthYear; // bookedMonth when set, else the date's month
+  bookedMonth?: MonthYear;
   currency: string;
   label?: string;
   goalId?: string; // paid from a goal instead of the month's budget; never set with label
@@ -204,9 +207,9 @@ export interface GoalAllocation {
 }
 
 export interface SavingsOpening {
-  amount: number; // cents: balance minus the start month's total allocation
-  balance: number;
-  allocated: number;
+  amount: number; // cents: liquid balance as the start month began
+  balance: number; // liquid balance when computed
+  movedSince: number; // net posted inflow on those accounts from the start month to computedAt
   computedAt: FireTimestampLike;
 }
 

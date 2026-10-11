@@ -39,16 +39,22 @@ function row(amount: number, fields: Partial<LineEntryView>): LineEntryView {
   };
 }
 
-test("the savings result is planned savings moved by the spending variance, and can go negative", () => {
-  const under = monthReport("2026-10", budget, [row(200000, { label: "Rent" }), row(80000, { label: "Fun" })]);
+test("the savings result is entry minus spending, and can go negative", () => {
+  const income = row(-500000, { label: "Salary" });
+  const under = monthReport("2026-10", budget, [income, row(200000, { label: "Rent" }), row(80000, { label: "Fun" })]);
   assert.equal(under.savingsResult, 220000);
-  const over = monthReport("2026-10", budget, [row(200000, { label: "Rent" }), row(350000, { label: "Fun" })]);
+  assert.deepEqual(monthSavingsShares(under), [
+    { name: "Emergency", amount: 165000 },
+    { name: "Travel", amount: 55000 },
+  ]);
+  const over = monthReport("2026-10", budget, [income, row(200000, { label: "Rent" }), row(350000, { label: "Fun" })]);
   assert.equal(over.savingsResult, -50000);
   assert.deepEqual(monthSavingsShares(over), []);
 });
 
 test("a goal purchase shows in the report but doesn't make the month overspent", () => {
   const report = monthReport("2026-10", budget, [
+    row(-500000, { label: "Salary" }),
     row(200000, { label: "Rent" }),
     row(100000, { label: "Fun" }),
     row(1500000, { goalId: "g_car" }),

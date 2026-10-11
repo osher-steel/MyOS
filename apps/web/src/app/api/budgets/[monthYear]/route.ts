@@ -1,4 +1,4 @@
-import { budgetId, isMonthYear, type Budget } from "@myos/shared";
+import { budgetId, isMonthYear, type Budget, type EffectiveBudget } from "@myos/shared";
 import { NextResponse } from "next/server";
 import { ApiError, apiFetch } from "@/lib/api";
 import { env } from "@/lib/env";
@@ -17,7 +17,7 @@ export async function GET(_req: Request, { params }: Params) {
   if (!isMonthYear(monthYear)) return invalidMonth();
 
   try {
-    const budget = await apiFetch<Budget>(`/budgets/${budgetId(env("MYOS_OWNER_UID"), monthYear)}`);
+    const budget = await apiFetch<EffectiveBudget>(`/budgets/months/${monthYear}`);
     return NextResponse.json({ data: budget });
   } catch (error) {
     return fromError(error);

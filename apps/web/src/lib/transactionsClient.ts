@@ -23,7 +23,7 @@ export async function syncTransactions(): Promise<LedgerRefresh> {
   return unwrap<LedgerRefresh>(await fetch("/api/transactions/syncs", { method: "POST" }));
 }
 
-export type LineEntryEdit = Partial<Pick<LineEntry, "label" | "tags">>;
+export type LineEntryEdit = Partial<Pick<LineEntry, "label" | "tags">> & { bookedMonth?: MonthYear | null };
 
 export async function patchLineEntry(entry: LineEntryView, edit: LineEntryEdit): Promise<LineEntry> {
   const res = await fetch(`/api/transactions/${entry.monthYear}/${entry.id}`, {

@@ -1,5 +1,6 @@
 export * from "./breakdowns.js";
 export * from "./budgetId.js";
+export * from "./budgetSuggestions.js";
 export * from "./budgetUsage.js";
 export * from "./date.js";
 export * from "./descriptions.js";

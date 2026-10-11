@@ -27,12 +27,23 @@ export function buildLineEntryCreateRecord(input: LineEntryPost): LineEntryRecor
   };
 }
 
-export function buildLineEntryPatchRecord(patch: LineEntryPatch): Record<string, unknown> {
+// A booked month equal to the date's month is no override, so it's cleared rather than stored
+function bookingFields(bookedMonth: LineEntryPatch["bookedMonth"], existing?: Pick<LineEntryEntity, "date">): Record<string, unknown> {
+  if (bookedMonth === undefined) return {};
+  if (!existing) throw new Error("Booking a month needs the entry's date.");
+  const dateMonth = existing.date.slice(0, 7);
+  if (bookedMonth === null || bookedMonth === dateMonth) return { bookedMonth: FieldValue.delete(), monthYear: dateMonth };
+  return { bookedMonth, monthYear: bookedMonth };
+}
+
+export function buildLineEntryPatchRecord(patch: LineEntryPatch, existing?: Pick<LineEntryEntity, "date">): Record<string, unknown> {
+  const { bookedMonth, ...rest } = patch;
   const excluding = patch.osStatus === LineEntryStatus.EXCLUDED;
   const filing = patch.label !== undefined || patch.goalId !== undefined || excluding;
   const osStatus = filing && patch.osStatus === undefined ? osStatusOf(patch.label, patch.goalId) : patch.osStatus;
   return {
-    ...patch,
+    ...rest,
+    ...bookingFields(bookedMonth, existing),
     ...(patch.goalId || excluding ? { label: FieldValue.delete() } : {}),
     ...(patch.label || excluding ? { goalId: FieldValue.delete() } : {}),
     ...(filing ? { labelSource: LabelSource.MANUAL, ruleId: FieldValue.delete() } : {}),
@@ -43,10 +54,10 @@ export function buildLineEntryPatchRecord(patch: LineEntryPatch): Record<string,
   };
 }
 
-async function buildGoalAwarePatchRecord(patch: LineEntryPatch): Promise<Record<string, unknown>> {
+async function buildGoalAwarePatchRecord(existing: LineEntryEntity, patch: LineEntryPatch): Promise<Record<string, unknown>> {
   if (patch.goalId) await activeGoal(patch.goalId);
   await assertKnownTags(patch.tags);
-  return buildLineEntryPatchRecord(patch);
+  return buildLineEntryPatchRecord(patch, existing);
 }
 
 function changedMonths({ before, after }: WriteChange): MonthYear[] {
@@ -64,7 +75,7 @@ export const lineEntryDomain: DomainInner = {
   },
   createId: (input) => (input as LineEntryPost).id,
   buildCreateRecord: (input) => buildLineEntryCreateRecord(input as LineEntryPost),
-  buildPatchRecord: (_existing, patch) => buildGoalAwarePatchRecord(patch as LineEntryPatch),
+  buildPatchRecord: (existing, patch) => buildGoalAwarePatchRecord(existing as LineEntryEntity, patch as LineEntryPatch),
   afterWrite: async (change) => {
     await syncGoalSpends([change.id]);
     const autoLabelled = await learnFromManualEdit(change);

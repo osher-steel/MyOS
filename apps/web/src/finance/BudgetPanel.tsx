@@ -20,6 +20,15 @@ function UsedOf({ used, allocated, savings, small }: { used: number; allocated: 
   );
 }
 
+function SavingsRow({ usage }: { usage: GroupUsage }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 pt-3 entry-meta">
+      <span className="uppercase tracking-[0.18em]">{GROUP_LABELS[usage.group]}</span>
+      <UsedOf used={usage.used} allocated={usage.allocated} savings small />
+    </div>
+  );
+}
+
 function GroupRow({ usage }: { usage: GroupUsage }) {
   const savings = usage.group === BudgetGroup.SAVINGS;
   return (
@@ -49,10 +58,12 @@ function GroupRow({ usage }: { usage: GroupUsage }) {
 
 export default function BudgetPanel({
   usage,
+  projected,
   loading,
   error,
 }: {
   usage: BudgetUsage | null;
+  projected: boolean;
   loading: boolean;
   error: string | null;
 }) {
@@ -67,11 +78,19 @@ export default function BudgetPanel({
       ) : (
         <>
           <div className="-mt-2.5">
-            {usage.groups.map((group) => (
-              <GroupRow key={group.group} usage={group} />
-            ))}
+            {usage.groups.map((group) =>
+              group.group === BudgetGroup.SAVINGS ? (
+                <SavingsRow key={group.group} usage={group} />
+              ) : (
+                <GroupRow key={group.group} usage={group} />
+              ),
+            )}
           </div>
-          <p className="entry-meta">Savings is filled when the month closes.</p>
+          <p className="entry-meta">
+            {projected
+              ? "Savings is entry minus spending, counting budgeted income that hasn't landed yet."
+              : "Savings is entry minus spending."}
+          </p>
         </>
       )}
     </Section>

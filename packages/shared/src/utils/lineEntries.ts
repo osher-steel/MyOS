@@ -95,14 +95,15 @@ export function byDateDesc(a: LineEntryView, b: LineEntryView): number {
 
 type StoredLabel = Pick<
   LineEntryView,
-  "id" | "label" | "goalId" | "labelSource" | "ruleId" | "tags" | "tagSource" | "osStatus"
+  "id" | "label" | "goalId" | "labelSource" | "ruleId" | "tags" | "tagSource" | "osStatus" | "bookedMonth"
 >;
 
 /**
- * Updates carry only Plaid-owned fields, so a sync can never overwrite a label.
- * A posted transaction replacing a stored pending one inherits its label or goal,
- * how it was labelled and its tags, and the pending row is deleted rather than
- * marked removed.
+ * Updates carry only Plaid-owned fields, so a sync can never overwrite a label
+ * or move an entry out of the month it was booked to. A posted transaction
+ * replacing a stored pending one inherits its label or goal, how it was
+ * labelled, its tags and its booked month, and the pending row is deleted
+ * rather than marked removed.
  */
 export function planSync(delta: PlaidSyncDelta, stored: ReadonlyMap<string, StoredLabel>): SyncPlan {
   const removed = new Set(delta.removed);
@@ -114,14 +115,16 @@ export function planSync(delta: PlaidSyncDelta, stored: ReadonlyMap<string, Stor
   const plan: SyncPlan = { creates: [], updates: [], removed: [], deletes: [] };
   for (const tx of latest.values()) {
     const fields = plaidOwnedFields(tx);
-    if (stored.has(tx.id)) {
-      plan.updates.push(fields);
+    const existing = stored.get(tx.id);
+    if (existing) {
+      plan.updates.push(existing.bookedMonth ? { ...fields, monthYear: existing.bookedMonth } : fields);
       continue;
     }
     const settled = tx.pendingTransactionId ? stored.get(tx.pendingTransactionId) : undefined;
     if (settled) plan.deletes.push(settled.id);
     plan.creates.push({
       ...fields,
+      ...(settled?.bookedMonth ? { bookedMonth: settled.bookedMonth, monthYear: settled.bookedMonth } : {}),
       ...(settled?.label ? { label: settled.label } : {}),
       ...(settled?.goalId ? { goalId: settled.goalId } : {}),
       ...(settled?.labelSource ? { labelSource: settled.labelSource } : {}),
