@@ -20,7 +20,7 @@
     "backup": "node --env-file=../../.env --import tsx scripts/backup.ts",
     "restore": "node --env-file=../../.env --import tsx scripts/restore.ts",
     "savings:start": "node --env-file=../../.env --import tsx scripts/start-savings.ts",
-    "deploy": "node scripts/deploy-functions.mjs"
+    "deploy:functions": "node scripts/deploy-functions.mjs"
   },
   "dependencies": {
     "cors": "^2.8.6",

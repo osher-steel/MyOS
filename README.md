@@ -37,7 +37,7 @@ pnpm test           # api tests (node:test, no Firestore needed)
 pnpm api daily      # sync Plaid and regenerate month reports once
 ```
 
-`pnpm api deploy` bundles the API and deploys the `api` HTTP function and the
+`pnpm api deploy:functions` bundles the API and deploys the `api` HTTP function and the
 `dailyRefresh` scheduled function (06:00 America/New_York, every book). The
 Plaid tokens from `~/.plaid/tokens.json`, the Plaid secret and the system key
 go to Secret Manager, so redeploy after linking a bank.
@@ -66,7 +66,7 @@ chosen-book cookie and forwards both to the API.
 ## Deploying
 
 ```bash
-pnpm api deploy     # api + dailyRefresh functions; secrets to Secret Manager
+pnpm api deploy:functions     # api + dailyRefresh functions; secrets to Secret Manager
 ```
 
 The web app deploys on Vercel with root directory `apps/web` (see
