@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BudgetGroup, budgetSuggestions, DEFAULT_CATEGORIES, toMonthYear, type Budget } from "@myos/shared";
+import { BudgetGroup, budgetSuggestions, DEFAULT_CATEGORIES, incomeSuggestion, toMonthYear, type Budget } from "@myos/shared";
 
 const month = (id: string, needs: Record<string, number>): Budget => ({
   id,
@@ -29,4 +29,15 @@ test("suggestions use the newest amount for each past name, then unused defaults
 test("the open month follows New York time, not the server's", () => {
   assert.equal(toMonthYear(new Date("2026-11-01T03:30:00Z")), "2026-10");
   assert.equal(toMonthYear(new Date("2026-11-01T05:00:00Z")), "2026-11");
+});
+
+test("income suggestion averages the latest months that took in money", () => {
+  const reports = [
+    { monthYear: "2026-06", entry: 0 },
+    { monthYear: "2026-07", entry: 900000 },
+    { monthYear: "2026-08", entry: 450000 },
+    { monthYear: "2026-09", entry: 388000 },
+  ];
+  assert.deepEqual(incomeSuggestion(reports), { average: 579333, last: 388000, months: 3 });
+  assert.equal(incomeSuggestion([{ monthYear: "2026-06", entry: 0 }]), null);
 });

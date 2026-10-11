@@ -3,14 +3,17 @@
 import {
   BudgetGroup,
   budgetSuggestions,
+  incomeSuggestion,
   toMonthYear,
   type Budget,
   type CategorySuggestion,
+  type IncomeSuggestion,
   type EffectiveBudget,
   type MonthYear,
 } from "@myos/shared";
 import { useEffect, useMemo, useState } from "react";
 import { BudgetClientError, fetchBudget, fetchBudgets, saveBudget, type BudgetDraft } from "@/lib/budgetsClient";
+import { fetchPastReports } from "@/lib/reportsClient";
 
 export type EditErrors = Record<BudgetGroup | "income" | "main", string | null>;
 
@@ -76,12 +79,18 @@ export function useFinanceEdit(monthYear: MonthYear) {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [history, setHistory] = useState<Budget[]>([]);
+  const [income, setIncomeSuggestion] = useState<IncomeSuggestion | null>(null);
 
   useEffect(() => {
     let ignore = false;
     fetchBudgets()
       .then((budgets) => {
         if (!ignore) setHistory(budgets);
+      })
+      .catch(() => {});
+    fetchPastReports(3)
+      .then((reports) => {
+        if (!ignore) setIncomeSuggestion(incomeSuggestion(reports.filter((report) => report.monthYear < toMonthYear())));
       })
       .catch(() => {});
     return () => {
@@ -219,6 +228,7 @@ export function useFinanceEdit(monthYear: MonthYear) {
     carriedFrom: current?.existing?.carriedFrom ?? null,
     draft,
     suggestions,
+    incomeSuggestion: income,
     splitSavings,
     errors,
     saving,

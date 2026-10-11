@@ -174,6 +174,21 @@ export default function BudgetEditor({ monthYear }: { monthYear: MonthYear }) {
             aria-label="Expected income"
           />
         </div>
+        {edit.incomeSuggestion ? (
+          <p className="entry-meta mt-2">
+            Last {edit.incomeSuggestion.months === 1 ? "month" : `${edit.incomeSuggestion.months} months`} brought in{" "}
+            {edit.incomeSuggestion.months === 1 ? "" : `${money(edit.incomeSuggestion.average)} on average, last month `}
+            {money(edit.incomeSuggestion.last)}.{" "}
+            {edit.incomeSuggestion.months > 1 ? (
+              <button type="button" className="text-ink hover:text-accent" onClick={() => edit.setIncome(edit.incomeSuggestion!.average)}>
+                use average
+              </button>
+            ) : null}{" "}
+            <button type="button" className="text-ink hover:text-accent" onClick={() => edit.setIncome(edit.incomeSuggestion!.last)}>
+              use last month
+            </button>
+          </p>
+        ) : null}
         <Field message={edit.errors.income} />
       </Section>
 
