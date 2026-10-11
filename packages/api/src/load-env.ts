@@ -20,3 +20,13 @@ if (!process.env.APP_FIREBASE_PROJECT_ID) {
     // Deployed functions have no .env on disk — env comes from the runtime.
   }
 }
+
+// Lets a one-off script talk to another project kept in .env under a prefix, e.g. FIREBASE_ENV_PREFIX=OG_
+const prefix = process.env.FIREBASE_ENV_PREFIX;
+if (prefix) {
+  for (const key of ["APP_FIREBASE_PROJECT_ID", "APP_FIREBASE_CLIENT_EMAIL", "APP_FIREBASE_PRIVATE_KEY"]) {
+    const value = process.env[`${prefix}${key}`];
+    if (!value) throw new Error(`FIREBASE_ENV_PREFIX=${prefix} but ${prefix}${key} is not set`);
+    process.env[key] = value;
+  }
+}
