@@ -14,21 +14,28 @@ pnpm api lint
 ## Environment
 
 Read from the repo-root `.env` (see `.env.example`). Firestore + Auth need
-a service account (`APP_FIREBASE_*`); `MYOS_OWNER_UID` names the one human;
-`MYOS_API_KEY` is a `myos_`-prefixed secret for scripts and agents.
+a service account (`APP_FIREBASE_*`); `MYOS_API_KEY` is the `myos_`-prefixed
+system key for scripts and local tools.
 
-## Auth
+## Books and auth
 
-There is one user, so the monorepo's permission map collapses to three levels:
+Every route except `/books` and `/sessions` acts inside one book, named by the
+`X-Book` header (or implied by a book key), and its data lives under
+`books/{bookId}/…`. Repos and services resolve their collections per call
+from that book, so nothing can read across books.
 
 | `permission` | Who gets through |
 | --- | --- |
-| `"none"` | anyone; a valid token still resolves `client` |
-| `"auth"` | any verified Firebase ID token, or the API key |
-| `"owner"` | the Firebase uid in `MYOS_OWNER_UID`, or the API key |
+| `"none"` | anyone; a valid credential still resolves `client` |
+| `"auth"` | any signed-in Google user, a book key or the system key |
+| `"owner"` | a member of the request's book, its book key, or the system key |
+| `"bookOwner"` | an owner of the request's book, or the system key |
 
-Send either as `Authorization: Bearer <token>`. `resolvePermission` throws
-`ServiceForbiddenError`; the builder turns it into `403 { error, code }`.
+Credentials: `X-Session` (a session cookie from `POST /sessions`, used by the
+web app), `Authorization: Bearer <Firebase ID token>`, `Bearer myos_<book>_…`
+(a book key from `POST /books/keys`), or `Bearer <MYOS_API_KEY>`.
+`resolvePermission` throws `ServiceForbiddenError`; the builder turns it into
+`403 { error, code }`.
 
 ## Adding a domain
 

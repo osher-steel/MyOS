@@ -47,10 +47,9 @@ const plaidEnv = () => process.env.PLAID_ENV ?? "production";
 const tokensFile = () => process.env.PLAID_TOKENS_FILE ?? join(homedir(), ".plaid", "tokens.json");
 
 function storedItems(): Record<string, StoredItem> {
-  // Deployed functions get the token store as env, since there is no file to read
-  const encoded = process.env.PLAID_ITEMS_B64;
+  // Deployed functions get the token store from Secret Manager, since there is no file to read
   try {
-    const raw = encoded ? Buffer.from(encoded, "base64").toString("utf8") : readFileSync(tokensFile(), "utf8");
+    const raw = process.env.PLAID_ITEMS ?? readFileSync(tokensFile(), "utf8");
     return (JSON.parse(raw) as { items?: Record<string, StoredItem> }).items ?? {};
   } catch {
     return {};

@@ -7,12 +7,15 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 const TIERS = {
   /** Anonymous requests, keyed by IP. */
   public: { windowMs: 60_000, max: 120 },
-  /** Requests carrying a bearer token, keyed by the hashed token. */
+  /** Requests carrying a session or bearer token, keyed by its hash. */
   authenticated: { windowMs: 60_000, max: 1_000 },
 } as const;
 
+const credentialOf = (req: Request) =>
+  req.header("X-Session") ?? req.headers.authorization?.replace(/^Bearer\s+/i, "").trim();
+
 function getTier(req: Request): keyof typeof TIERS {
-  return req.headers.authorization ? "authenticated" : "public";
+  return credentialOf(req) ? "authenticated" : "public";
 }
 
 // ── Key generation ───────────────────────────────────────
@@ -21,17 +24,10 @@ function hash(s: string): string {
   return createHash("sha256").update(s).digest("hex");
 }
 
+// Web traffic all arrives from the host's IPs, so a credential, not the IP, is the caller
 function getClientKey(req: Request): string {
-  const auth = req.headers.authorization;
-
-  if (auth) {
-    const token = auth.replace(/^Bearer\s+/i, "").trim();
-    if (token) {
-      // The API key and Firebase JWTs are both opaque bearer tokens —
-      // hashing them gives a stable key.
-      return `tok:${hash(token)}`;
-    }
-  }
+  const credential = credentialOf(req);
+  if (credential) return `tok:${hash(credential)}`;
 
   // ipKeyGenerator applies IPv6 subnet masking so one subnet can't bypass it.
   return `ip:${ipKeyGenerator(req.ip ?? "unknown")}`;

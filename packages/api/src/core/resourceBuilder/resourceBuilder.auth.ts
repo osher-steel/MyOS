@@ -67,10 +67,28 @@ async function memberPrincipal(decoded: DecodedIdToken, bookId: string | undefin
   return member ? { ...signedIn, bookId, role: member.role } : signedIn;
 }
 
+export const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+
+// The web app keeps a Firebase session cookie (minted by POST /sessions) and forwards it here
+async function verifySession(req: Request, session: string): Promise<DecodedIdToken | undefined> {
+  try {
+    const decoded = await auth.verifySessionCookie(session);
+    req.uid = decoded.uid;
+    return decoded;
+  } catch {
+    return undefined;
+  }
+}
+
 async function resolveClient(req: Request): Promise<Principal | undefined> {
+  const bookId = maybeBookId();
+  const session = req.header("X-Session");
+  if (session) {
+    const decoded = await verifySession(req, session);
+    return decoded ? memberPrincipal(decoded, bookId) : undefined;
+  }
   const token = getBearerToken(req.header("Authorization"));
   if (!token) return undefined;
-  const bookId = maybeBookId();
   if (token.startsWith(KEY_PREFIX)) {
     if (systemKeyMatches(token)) return { id: "system", kind: PrincipalKind.API_KEY, ...(bookId ? { bookId } : {}) };
     return bookKeyPrincipal(token, bookId);

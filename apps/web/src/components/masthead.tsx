@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BookSwitcher } from "./BookSwitcher";
 
 export type Tab = "home" | "reports" | "subscriptions" | "goals" | "settings";
 
@@ -19,7 +20,10 @@ export function Masthead({ title, current }: { title: string; current: Tab }) {
 
   return (
     <header className="border-b border-ink pb-4 mb-12">
-      <p className="entry-meta uppercase tracking-[0.18em]">{today}</p>
+      <div className="flex items-baseline justify-between gap-4">
+        <p className="entry-meta uppercase tracking-[0.18em]">{today}</p>
+        <BookSwitcher />
+      </div>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
         <h1 className="masthead">{title}</h1>
         <nav aria-label="Sections" className="flex flex-wrap gap-x-5 gap-y-2 sm:gap-x-7">

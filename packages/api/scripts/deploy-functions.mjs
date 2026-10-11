@@ -35,12 +35,26 @@ writeFileSync(
     dependencies: pkg.dependencies }, null, 2),
 );
 
+const project = process.env.APP_FIREBASE_PROJECT_ID;
+
+// Secrets go to Secret Manager through stdin, so they never touch a file in the bundle
+function setSecret(name, value) {
+  if (!value) throw new Error(`${name} is empty; refusing to deploy without it`);
+  const result = spawnSync("firebase", ["functions:secrets:set", name, "--data-file", "-", "--project", project, "--force"], {
+    cwd: rootDir,
+    input: value,
+    stdio: ["pipe", "inherit", "inherit"],
+  });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+setSecret("PLAID_ITEMS", JSON.stringify({ items }));
+setSecret("PLAID_CLIENT_SECRET", process.env.PLAID_CLIENT_SECRET);
+setSecret("MYOS_API_KEY", process.env.MYOS_API_KEY);
+
 const env = {
   PLAID_ENV: plaidEnv,
   PLAID_CLIENT_ID: process.env.PLAID_CLIENT_ID,
-  PLAID_CLIENT_SECRET: process.env.PLAID_CLIENT_SECRET,
-  PLAID_ITEMS_B64: Buffer.from(JSON.stringify({ items })).toString("base64"),
-  MYOS_OWNER_UID: process.env.MYOS_OWNER_UID,
   TZ: "America/New_York",
 };
 writeFileSync(join(outDir, ".env"), Object.entries(env).map(([key, value]) => `${key}=${value}`).join("\n") + "\n", {
@@ -48,5 +62,4 @@ writeFileSync(join(outDir, ".env"), Object.entries(env).map(([key, value]) => `$
 });
 
 run("npm", ["install", "--omit=dev", "--no-audit", "--no-fund"], outDir);
-run("firebase", ["deploy", "--only", "functions:dailyRefresh", "--project", process.env.APP_FIREBASE_PROJECT_ID,
-  "--force"], rootDir);
+run("firebase", ["deploy", "--only", "functions:api,functions:dailyRefresh", "--project", project, "--force"], rootDir);

@@ -18,7 +18,7 @@
     "resync": "node --env-file=../../.env --import tsx scripts/resync.ts",
     "reports": "node --env-file=../../.env --import tsx scripts/regenerate-reports.ts",
     "savings:start": "node --env-file=../../.env --import tsx scripts/start-savings.ts",
-    "deploy:daily": "node scripts/deploy-functions.mjs"
+    "deploy": "node scripts/deploy-functions.mjs"
   },
   "dependencies": {
     "cors": "^2.8.6",

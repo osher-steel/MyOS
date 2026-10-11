@@ -1,10 +1,11 @@
 import { toMonthYear } from "@myos/shared";
 import { Router } from "express";
 import { z } from "zod";
+import { auth } from "../config/firebase.js";
 import { currentBookId } from "../core/books/bookContext.js";
 import { processError } from "../core/errors/errorResponses.js";
-import { ServiceNotFoundError } from "../core/errors/errors.js";
-import { resolvePermission } from "../core/resourceBuilder/resourceBuilder.auth.js";
+import { ServiceForbiddenError, ServiceNotFoundError } from "../core/errors/errors.js";
+import { resolvePermission, SESSION_TTL_MS } from "../core/resourceBuilder/resourceBuilder.auth.js";
 import { defineResource, parseOrThrow } from "../core/resourceBuilder/resourceBuilder.js";
 import { budgetDomain } from "../domains/budgets/budgets.domain.js";
 import { monthYearSchema } from "../domains/budgets/budgets.schemas.js";
@@ -306,10 +307,30 @@ bookRoutes.post("/keys", async (req, res) => {
   }
 });
 
+// ── Sessions ──────────────────────────────────────────────
+// Trades a fresh Google sign-in (Firebase ID token) for a session cookie
+// value the web app stores httpOnly and forwards as X-Session.
+
+const sessionSchema = z.object({ idToken: z.string().min(1) }).strict();
+const sessionRoutes = Router();
+
+sessionRoutes.post("/", async (req, res) => {
+  try {
+    const { idToken } = parseOrThrow(sessionSchema, req.body, "session");
+    const session = await auth.createSessionCookie(idToken, { expiresIn: SESSION_TTL_MS }).catch(() => {
+      throw new ServiceForbiddenError("Sign-in expired or invalid.");
+    });
+    res.status(201).json({ data: { session, expiresIn: SESSION_TTL_MS } });
+  } catch (error) {
+    processError(res, error, "Failed to start a session");
+  }
+});
+
 // ── Mounts ────────────────────────────────────────────────
 // One line per resource. Add new domains above and mount them here.
 
 router.use("/books", bookRoutes);
+router.use("/sessions", sessionRoutes);
 router.use("/budgets", budget.router);
 router.use("/firestore-index-requests", firestoreIndex.router);
 router.use("/goal-allocations", goalAllocation.router);

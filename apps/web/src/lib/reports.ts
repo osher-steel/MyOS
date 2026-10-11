@@ -15,7 +15,7 @@ import { ApiError, apiFetch, currentBook } from "./api";
 
 async function loadBudget(monthYear: MonthYear): Promise<Budget | null> {
   try {
-    return await apiFetch<Budget>(`/budgets/${budgetId(currentBook(), monthYear)}`);
+    return await apiFetch<Budget>(`/budgets/${budgetId(await currentBook(), monthYear)}`);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null;
     throw error;

@@ -6,7 +6,6 @@ import {
   monthReport,
   toMonthYear,
   totalLineEntries,
-  type LineEntry,
   type LineEntryView,
   type MonthReport,
   type MonthYear,

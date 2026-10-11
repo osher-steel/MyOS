@@ -32,7 +32,7 @@ export async function PUT(req: Request, { params }: Params) {
   if (!isMonthYear(monthYear)) return invalidMonth();
 
   const draft: unknown = await req.json();
-  const id = budgetId(currentBook(), monthYear);
+  const id = budgetId(await currentBook(), monthYear);
 
   try {
     const budget = await apiFetch<Budget>(`/budgets/${id}`, { method: "PATCH", body: JSON.stringify(draft) });
