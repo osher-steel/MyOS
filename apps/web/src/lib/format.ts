@@ -35,6 +35,7 @@ export function clock(iso: string): string {
 export function transactionMeta(entry: LineEntryView): string {
   const parts = [day(entry.date)];
   if (entry.plaidStatus === PlaidTransactionStatus.PENDING) parts.push("pending");
+  if (entry.business) parts.push("business");
   if (entry.bookedMonth) parts.push(`booked to ${formatMonthYear(entry.bookedMonth)}`);
   if (labelSourceOf(entry) === LabelSource.RULE) parts.push("auto-labelled");
   return parts.join(" · ");

@@ -9,7 +9,7 @@ import { TagEditor } from "./TagEditor";
 import TransactionCard from "./TransactionCard";
 import { useTags } from "./useTags";
 
-type Tab = "all" | "labelled" | "unlabelled";
+type Tab = "all" | "labelled" | "unlabelled" | "business";
 
 const MOBILE_PREVIEW = 5;
 
@@ -17,6 +17,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "all", label: "All" },
   { id: "labelled", label: "Labelled" },
   { id: "unlabelled", label: "Unlabelled" },
+  { id: "business", label: "Business" },
 ];
 
 type Filter = { kind: "tag" | "label"; value: string } | null;
@@ -46,6 +47,7 @@ export default function TransactionsPanel({
   labelEntry,
   tagEntry,
   bookEntry,
+  markBusiness,
   loading,
   sync,
   errors,
@@ -56,6 +58,7 @@ export default function TransactionsPanel({
   labelEntry: (entry: LineEntryView, label: string) => void;
   tagEntry: (entry: LineEntryView, tags: string[]) => void;
   bookEntry: (entry: LineEntryView, bookedMonth: MonthYear | null) => void;
+  markBusiness: (entry: LineEntryView, business: boolean) => void;
   loading: boolean;
   sync: { syncing: boolean; syncedAt: Date | null; autoLabelled: number };
   errors: { api: string | null; sync: string | null; save: string | null };
@@ -65,7 +68,7 @@ export default function TransactionsPanel({
   const [expanded, setExpanded] = useState(false);
   const [filter, setFilter] = useState<Filter>(null);
   const vocabulary = useTags();
-  const opened = openId ? groups.all.find((entry) => entry.id === openId) : undefined;
+  const opened = openId ? [...groups.all, ...groups.business].find((entry) => entry.id === openId) : undefined;
   const tagCounts = useMemo(() => countBy(groups.all, (entry) => entry.tags ?? []), [groups.all]);
   const labelCounts = useMemo(() => countBy(groups.all, (entry) => (entry.label ? [entry.label] : [])), [groups.all]);
   const filtered = useMemo(
@@ -201,6 +204,7 @@ export default function TransactionsPanel({
           onClose={() => setOpenId(null)}
           onLabel={labelEntry}
           onTags={tagEntry}
+          onBusiness={markBusiness}
           onBook={(entry, bookedMonth) => {
             bookEntry(entry, bookedMonth);
             setOpenId(null);

@@ -21,6 +21,8 @@ export interface MonthReport {
   spent: number;
   unlabelledSpent: number;
   unlabelledCount: number;
+  businessPaid: number;
+  businessReimbursed: number;
   breakdowns: LineEntryBreakdowns;
   net: number;
   spendingAllocated: number;
@@ -59,6 +61,8 @@ export function monthReport(
     spent: totals.spent,
     unlabelledSpent: totals.spentUnlabelled,
     unlabelledCount: groups.unlabelled.length,
+    businessPaid: groups.business.reduce((total, row) => total + Math.max(row.amount, 0), 0),
+    businessReimbursed: groups.business.reduce((total, row) => total + Math.max(-row.amount, 0), 0),
     breakdowns: lineEntryBreakdowns(groups.all),
     goalSpent: totals.spentFromGoals,
     net: entry - totals.spent,

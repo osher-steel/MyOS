@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  businessOwed,
   LineEntryStatus,
   MonthOutcome,
   monthReport,
@@ -78,4 +79,14 @@ test("an open month projects savings from budgeted income until entry passes it"
   assert.equal(monthReport("2026-08", budget, rows).savingsResult, -1200);
   const overEarned = monthReport("2026-08", budget, [row(-5000), ...rows.slice(1)], { projected: true });
   assert.equal(overEarned.savingsResult, 2800);
+});
+
+test("business entries stay out of entry and spending and are tallied on their own", () => {
+  const paid = { ...row(500, "Flyers"), business: true };
+  const reimbursed = { ...row(-300), business: true };
+  const report = monthReport("2026-08", budget, [row(-4200), row(1500, "Rent"), paid, reimbursed]);
+  assert.deepEqual([report.entry, report.spent, report.unlabelledCount], [4200, 1500, 1]);
+  assert.deepEqual([report.businessPaid, report.businessReimbursed], [500, 300]);
+  assert.equal(report.savingsResult, 2700);
+  assert.equal(businessOwed([paid, reimbursed, row(100)]), 200);
 });

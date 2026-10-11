@@ -36,6 +36,7 @@ export default function ReportPanel({
   inProgress,
   savingsRemaining,
   goals,
+  businessOwed,
   onAssigned,
   regenerate,
   regenerating,
@@ -47,6 +48,7 @@ export default function ReportPanel({
   inProgress: boolean;
   savingsRemaining: number | null;
   goals: Goal[];
+  businessOwed: number | null;
   onAssigned: () => void;
   regenerate: () => void;
   regenerating: boolean;
@@ -93,6 +95,15 @@ export default function ReportPanel({
           ) : null}
 
           <p className="entry-title">{reportSummary(report, inProgress)}</p>
+          {report.businessPaid > 0 || report.businessReimbursed > 0 || businessOwed ? (
+            <p className="entry-meta">
+              Business: {money(report.businessPaid)} paid for DIBS, {money(report.businessReimbursed)} paid back this month
+              {businessOwed !== null && businessOwed !== 0
+                ? ` · ${businessOwed > 0 ? `DIBS owes you ${money(businessOwed)}` : `you owe DIBS ${money(-businessOwed)}`} overall`
+                : ""}
+              .
+            </p>
+          ) : null}
           {open.length > 0 ? (
             <p className="entry-meta">
               To close: {open.join(", ")}.

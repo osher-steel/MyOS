@@ -1,4 +1,4 @@
-import type { LineEntry, LineEntryView, MonthYear } from "@myos/shared";
+import type { BusinessSummary, LineEntry, LineEntryView, MonthYear } from "@myos/shared";
 import { unwrap } from "./proxyClient";
 
 export type ItemSyncResult = {
@@ -23,7 +23,11 @@ export async function syncTransactions(): Promise<LedgerRefresh> {
   return unwrap<LedgerRefresh>(await fetch("/api/transactions/syncs", { method: "POST" }));
 }
 
-export type LineEntryEdit = Partial<Pick<LineEntry, "label" | "tags">> & { bookedMonth?: MonthYear | null };
+export type LineEntryEdit = Partial<Pick<LineEntry, "label" | "tags" | "business">> & { bookedMonth?: MonthYear | null };
+
+export async function fetchBusinessSummary(): Promise<BusinessSummary> {
+  return unwrap<BusinessSummary>(await fetch("/api/business"));
+}
 
 export async function patchLineEntry(entry: LineEntryView, edit: LineEntryEdit): Promise<LineEntry> {
   const res = await fetch(`/api/transactions/${entry.monthYear}/${entry.id}`, {

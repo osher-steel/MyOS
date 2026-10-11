@@ -35,6 +35,7 @@ export const lineEntryPatchSchema = z
     goalId: nonEmptyString,
     tags,
     bookedMonth: monthYearSchema.nullable(),
+    business: z.boolean(),
     plaidStatus: z.enum(PlaidTransactionStatus),
     osStatus: z.enum(LineEntryStatus),
   })
@@ -42,6 +43,7 @@ export const lineEntryPatchSchema = z
   .strict()
   .refine((data) => Object.keys(data).length > 0, { message: "At least one field must be provided." })
   .refine((data) => !(data.label && data.goalId), { message: "A transaction is paid from a category or a goal, not both." })
+  .refine((data) => !(data.business && data.goalId), { message: "A business transaction isn't paid from a goal." })
   .refine((data) => data.osStatus !== LineEntryStatus.EXCLUDED || (!data.label && !data.goalId), {
     message: "An excluded transaction has no label or goal.",
   });
@@ -56,6 +58,7 @@ export const lineEntryRecordSchema = z
     currency,
     label: label.optional(),
     goalId: nonEmptyString.optional(),
+    business: z.boolean().optional(),
     labelSource: z.enum(LabelSource).optional(),
     ruleId: nonEmptyString.optional(),
     tags: tags.optional(),

@@ -20,7 +20,7 @@ function add(tallies: Record<string, Tally>, key: string | undefined, amount: nu
 export function lineEntryBreakdowns(rows: LineEntryView[]): LineEntryBreakdowns {
   const breakdowns: LineEntryBreakdowns = { byLabel: {}, byTag: {}, byCategory: {}, byMerchant: {} };
   for (const row of rows) {
-    if (row.plaidStatus === PlaidTransactionStatus.REMOVED || row.osStatus === LineEntryStatus.EXCLUDED) continue;
+    if (row.plaidStatus === PlaidTransactionStatus.REMOVED || row.osStatus === LineEntryStatus.EXCLUDED || row.business) continue;
     add(breakdowns.byLabel, row.label, row.amount);
     add(breakdowns.byCategory, row.categoryDetailed, row.amount);
     add(breakdowns.byMerchant, row.merchantName ?? row.descriptionKey ?? row.name, row.amount);

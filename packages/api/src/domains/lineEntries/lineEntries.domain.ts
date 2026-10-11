@@ -37,13 +37,14 @@ function bookingFields(bookedMonth: LineEntryPatch["bookedMonth"], existing?: Pi
 }
 
 export function buildLineEntryPatchRecord(patch: LineEntryPatch, existing?: Pick<LineEntryEntity, "date">): Record<string, unknown> {
-  const { bookedMonth, ...rest } = patch;
+  const { bookedMonth, business, ...rest } = patch;
   const excluding = patch.osStatus === LineEntryStatus.EXCLUDED;
   const filing = patch.label !== undefined || patch.goalId !== undefined || excluding;
   const osStatus = filing && patch.osStatus === undefined ? osStatusOf(patch.label, patch.goalId) : patch.osStatus;
   return {
     ...rest,
     ...bookingFields(bookedMonth, existing),
+    ...(business === undefined ? {} : business ? { business: true, goalId: FieldValue.delete() } : { business: FieldValue.delete() }),
     ...(patch.goalId || excluding ? { label: FieldValue.delete() } : {}),
     ...(patch.label || excluding ? { goalId: FieldValue.delete() } : {}),
     ...(filing ? { labelSource: LabelSource.MANUAL, ruleId: FieldValue.delete() } : {}),

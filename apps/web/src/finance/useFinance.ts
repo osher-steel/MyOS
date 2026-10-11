@@ -11,6 +11,7 @@ import {
   type MonthReport,
   type MonthYear,
   GoalStatus,
+  type BusinessSummary,
   type Goal,
   type SavingsSummary,
 } from "@myos/shared";
@@ -18,7 +19,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchBudget } from "@/lib/budgetsClient";
 import { fetchGoals, fetchSavings } from "@/lib/goalsClient";
 import { fetchPastReports, regenerateReport } from "@/lib/reportsClient";
-import { fetchLineEntries, patchLineEntry, syncTransactions, type LineEntryEdit } from "@/lib/transactionsClient";
+import {
+  fetchBusinessSummary,
+  fetchLineEntries,
+  patchLineEntry,
+  syncTransactions,
+  type LineEntryEdit,
+} from "@/lib/transactionsClient";
 import useMonthlySource from "./useMonthlySource";
 
 export type SyncState = {
@@ -52,6 +59,20 @@ export default function useFinance({ historyMonths = 6, initialMonth }: { histor
   const [past, setPast] = useState<{ reports: MonthReport[]; error: string | null } | null>(null);
   const [savings, setSavings] = useState<SavingsSummary | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [business, setBusiness] = useState<BusinessSummary | null>(null);
+  const [businessVersion, setBusinessVersion] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+    fetchBusinessSummary()
+      .then((summary) => {
+        if (!ignore) setBusiness(summary);
+      })
+      .catch(() => {});
+    return () => {
+      ignore = true;
+    };
+  }, [sync.version, businessVersion]);
   const [reportsVersion, setReportsVersion] = useState(0);
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
@@ -122,8 +143,8 @@ export default function useFinance({ historyMonths = 6, initialMonth }: { histor
   const groups = useMemo(() => groupLineEntries(stored.data ?? []), [stored.data]);
   const totals = useMemo(() => totalLineEntries(groups), [groups]);
   const report = useMemo(
-    () => monthReport(monthYear, budget.data, groups.all, { projected: isCurrent }),
-    [monthYear, budget.data, groups, isCurrent],
+    () => monthReport(monthYear, budget.data, stored.data ?? [], { projected: isCurrent }),
+    [monthYear, budget.data, stored.data, isCurrent],
   );
   const usage = useMemo(() => {
     if (!budget.data) return null;
@@ -149,6 +170,13 @@ export default function useFinance({ historyMonths = 6, initialMonth }: { histor
   );
   const labelEntry = useCallback((entry: LineEntryView, label: string) => saveEntry(entry, { label }), [saveEntry]);
   const tagEntry = useCallback((entry: LineEntryView, tags: string[]) => saveEntry(entry, { tags }), [saveEntry]);
+  const markBusiness = useCallback(
+    async (entry: LineEntryView, isBusiness: boolean) => {
+      await saveEntry(entry, { business: isBusiness });
+      setBusinessVersion((v) => v + 1);
+    },
+    [saveEntry],
+  );
   const bookEntry = useCallback(
     (entry: LineEntryView, bookedMonth: MonthYear | null) => saveEntry(entry, { bookedMonth }),
     [saveEntry],
@@ -171,6 +199,7 @@ export default function useFinance({ historyMonths = 6, initialMonth }: { histor
       labelEntry,
       tagEntry,
       bookEntry,
+      markBusiness,
       loading: stored.loading,
       sync,
       errors: { api: stored.error, sync: sync.error, save: saveError },
@@ -182,6 +211,7 @@ export default function useFinance({ historyMonths = 6, initialMonth }: { histor
       regenerating,
       regenerateError,
       goals,
+      businessOwed: business?.owed ?? null,
       onAssigned: () => setReportsVersion((v) => v + 1),
       savingsRemaining: savings?.months.find((month) => month.monthYear === monthYear)?.remaining ?? null,
       loading: budget.loading || stored.loading,

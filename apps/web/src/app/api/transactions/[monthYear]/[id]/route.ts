@@ -9,11 +9,13 @@ export async function PATCH(req: Request, { params }: Params) {
   const { monthYear, id } = await params;
   if (!isMonthYear(monthYear)) return invalidMonth();
 
-  const { label, tags, bookedMonth } = (await req.json()) as Pick<LineEntry, "label" | "tags"> & { bookedMonth?: MonthYear | null };
+  const { label, tags, bookedMonth, business } = (await req.json()) as Pick<LineEntry, "label" | "tags" | "business"> & {
+    bookedMonth?: MonthYear | null;
+  };
   try {
     const entry = await apiFetch<LineEntry>(`/line-entries/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ label, tags, bookedMonth }),
+      body: JSON.stringify({ label, tags, bookedMonth, business }),
     });
     return NextResponse.json({ data: entry });
   } catch (error) {

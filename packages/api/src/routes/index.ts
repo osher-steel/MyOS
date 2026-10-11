@@ -20,6 +20,7 @@ import { tagDomain } from "../domains/tags/tags.domain.js";
 import { autoLabelAll } from "../services/autoLabel.js";
 import { effectiveBudget } from "../services/budgets.js";
 import { breakdownsBetween } from "../services/breakdowns.js";
+import { businessSummary } from "../services/business.js";
 import { completeGoal, transferBetweenGoals } from "../services/goals.js";
 import { refreshLedger } from "../services/ledgerRefresh.js";
 import { generateMonthReport } from "../services/monthReports.js";
@@ -92,6 +93,12 @@ const lineEntry = defineResource({
       path: "/syncs",
       permission: "owner",
       run: async () => ({ body: { data: await refreshLedger() } }),
+    },
+    business: {
+      method: "get",
+      path: "/business",
+      permission: "owner",
+      run: async () => ({ body: { data: await businessSummary() } }),
     },
     breakdowns: {
       method: "get",

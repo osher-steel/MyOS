@@ -59,6 +59,7 @@ export default function TransactionCard({
   onLabel,
   onTags,
   onBook,
+  onBusiness,
 }: {
   entry: CardEntry;
   budget: Budget | null;
@@ -67,6 +68,7 @@ export default function TransactionCard({
   onLabel: (entry: LineEntryView, label: string) => void;
   onTags: (entry: LineEntryView, tags: string[]) => void;
   onBook: (entry: LineEntryView, bookedMonth: MonthYear | null) => void;
+  onBusiness: (entry: LineEntryView, business: boolean) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
 
@@ -140,6 +142,13 @@ export default function TransactionCard({
               )}
             </Row>
           ) : null}
+          <Row label="Business">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={Boolean(entry.business)} onChange={(event) => onBusiness(entry, event.target.checked)} />
+              {inflow ? "DIBS paying me back" : "paid for DIBS"}
+            </label>
+            <span className="entry-meta block">left out of entry and spending, tallied as what DIBS owes you</span>
+          </Row>
           <Row label="Booked to">
             <input
               type="month"

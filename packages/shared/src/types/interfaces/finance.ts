@@ -92,6 +92,7 @@ export interface LineEntry extends PlaidDetails {
   currency: string;
   label?: string;
   goalId?: string; // paid from a goal instead of the month's budget; never set with label
+  business?: boolean; // paid or reimbursed for DIBS: outside entry and spending, tallied as owed
   labelSource?: LabelSource; // absent on entries labelled before sources existed, which were manual
   ruleId?: string;
   tags?: Tag[];

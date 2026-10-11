@@ -33,7 +33,14 @@ export function tagSourceOf(entry: Pick<LineEntryView, "tags" | "tagSource">): L
 const live = (entry: LineEntryView) => entry.plaidStatus !== PlaidTransactionStatus.REMOVED;
 
 export function isUnlabelled(entry: LineEntryView): boolean {
-  return !entry.label && !entry.goalId && entry.osStatus !== LineEntryStatus.EXCLUDED && live(entry);
+  return !entry.label && !entry.goalId && !entry.business && entry.osStatus !== LineEntryStatus.EXCLUDED && live(entry);
+}
+
+export type BusinessSummary = { owed: number; count: number };
+
+/** Positive when DIBS owes you: paid out on its behalf minus what it paid back. */
+export function businessOwed(entries: LineEntryView[]): number {
+  return entries.filter((entry) => entry.business && live(entry)).reduce((sum, entry) => sum + entry.amount, 0);
 }
 
 export function isManuallyLabelled(entry: LineEntryView): boolean {
@@ -95,7 +102,7 @@ export function byDateDesc(a: LineEntryView, b: LineEntryView): number {
 
 type StoredLabel = Pick<
   LineEntryView,
-  "id" | "label" | "goalId" | "labelSource" | "ruleId" | "tags" | "tagSource" | "osStatus" | "bookedMonth"
+  "id" | "label" | "goalId" | "labelSource" | "ruleId" | "tags" | "tagSource" | "osStatus" | "bookedMonth" | "business"
 >;
 
 /**
@@ -127,6 +134,7 @@ export function planSync(delta: PlaidSyncDelta, stored: ReadonlyMap<string, Stor
       ...(settled?.bookedMonth ? { bookedMonth: settled.bookedMonth, monthYear: settled.bookedMonth } : {}),
       ...(settled?.label ? { label: settled.label } : {}),
       ...(settled?.goalId ? { goalId: settled.goalId } : {}),
+      ...(settled?.business ? { business: true } : {}),
       ...(settled?.labelSource ? { labelSource: settled.labelSource } : {}),
       ...(settled?.ruleId ? { ruleId: settled.ruleId } : {}),
       ...(settled?.tags?.length ? { tags: settled.tags } : {}),
@@ -152,6 +160,7 @@ export function touchedMonths(plan: SyncPlan, stored: ReadonlyMap<string, Pick<L
 
 export type LineEntryGroups = {
   all: LineEntryView[];
+  business: LineEntryView[];
   labelled: LineEntryView[];
   unlabelled: LineEntryView[];
   fromGoals: LineEntryView[];
@@ -168,9 +177,11 @@ export type LineEntryTotals = {
 const outflow = (rows: LineEntryView[]) => rows.reduce((sum, row) => sum + Math.max(row.amount, 0), 0);
 
 export function groupLineEntries(rows: LineEntryView[]): LineEntryGroups {
-  const all = rows.filter((row) => live(row) && row.osStatus !== LineEntryStatus.EXCLUDED).sort(byDateDesc);
+  const counted = rows.filter((row) => live(row) && row.osStatus !== LineEntryStatus.EXCLUDED).sort(byDateDesc);
+  const all = counted.filter((row) => !row.business);
   return {
     all,
+    business: counted.filter((row) => row.business),
     labelled: all.filter((row) => row.label !== undefined),
     unlabelled: all.filter((row) => row.label === undefined && row.goalId === undefined),
     fromGoals: all.filter((row) => row.goalId !== undefined),
