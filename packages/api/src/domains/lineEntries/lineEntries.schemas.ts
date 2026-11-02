@@ -32,7 +32,7 @@ export const lineEntryPatchSchema = z
   .object({
     amount: z.number().int(),
     label,
-    goalId: nonEmptyString,
+    goalId: nonEmptyString.nullable(), // null takes the transaction off its goal
     tags,
     bookedMonth: monthYearSchema.nullable(),
     business: z.boolean(),
@@ -42,7 +42,6 @@ export const lineEntryPatchSchema = z
   .partial()
   .strict()
   .refine((data) => Object.keys(data).length > 0, { message: "At least one field must be provided." })
-  .refine((data) => !(data.label && data.goalId), { message: "A transaction is paid from a category or a goal, not both." })
   .refine((data) => !(data.business && data.goalId), { message: "A business transaction isn't paid from a goal." })
   .refine((data) => data.osStatus !== LineEntryStatus.EXCLUDED || (!data.label && !data.goalId), {
     message: "An excluded transaction has no label or goal.",

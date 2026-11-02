@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   groupLineEntries,
+  LabelSource,
   LineEntryStatus,
   PlaidTransactionStatus,
   planSync,
@@ -200,7 +201,9 @@ test("labelling with a goal clears the category label and the reverse", () => {
   assert.ok("label" in toGoal && !("goalId" in toGoal && toGoal.goalId !== "g_car"));
   const toLabel = buildLineEntryPatchRecord({ label: "Rent" });
   assert.ok("goalId" in toLabel);
-  assert.equal(lineEntryPatchSchema.safeParse({ label: "Rent", goalId: "g_car" }).success, false);
+  const off = buildLineEntryPatchRecord({ goalId: null });
+  assert.ok("goalId" in off && off.osStatus === LineEntryStatus.NOT_LABELLED);
+
 });
 
 test("a booked month moves the entry's month, and booking its date's month clears the override", () => {
@@ -226,4 +229,21 @@ test("sync keeps a booked month on updates and carries it from a pending row to 
     storedMap(pending),
   );
   assert.deepEqual([settle.creates[0]!.monthYear, settle.creates[0]!.bookedMonth], ["2026-10", "2026-10"]);
+});
+
+test("a business transaction keeps its label and its allocation side by side", () => {
+  const existing = { date: "2026-10-03", label: "Flyer distribution" };
+  const toPool = buildLineEntryPatchRecord({ goalId: "g_venue" }, existing, { combined: true });
+  assert.equal(toPool.goalId, "g_venue");
+  assert.ok(!("label" in toPool));
+  assert.equal(toPool.labelSource, undefined); // moving allocations isn't relabelling
+  assert.equal(toPool.osStatus, LineEntryStatus.LABELLED);
+
+  const relabel = buildLineEntryPatchRecord({ label: "Ads" }, { ...existing, goalId: "g_venue" }, { combined: true });
+  assert.ok(!("goalId" in relabel));
+  assert.equal(relabel.labelSource, LabelSource.MANUAL);
+
+  const offPool = buildLineEntryPatchRecord({ goalId: null }, { ...existing, goalId: "g_venue" }, { combined: true });
+  assert.ok("goalId" in offPool && offPool.goalId !== "g_venue");
+  assert.equal(offPool.osStatus, LineEntryStatus.LABELLED);
 });

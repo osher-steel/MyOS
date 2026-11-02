@@ -1,4 +1,6 @@
-import { LabelSource, LINE_ENTRIES_COLLECTION, LineEntryStatus, osStatusOf, type MonthYear } from "@myos/shared";
+import { isBusinessBook, LabelSource, LINE_ENTRIES_COLLECTION, LineEntryStatus, osStatusOf, type MonthYear } from "@myos/shared";
+import { currentBookId } from "../../core/books/bookContext.js";
+import { ServiceValidationError } from "../../core/errors/errors.js";
 import { FieldValue } from "../../config/firebase.js";
 import { FirestoreRepo, type FirestoreRepoTypeSet } from "../../core/firestore/firestoreRepo.js";
 import type { DomainInner, WriteChange } from "../../core/resourceBuilder/resourceBuilder.types.js";
@@ -36,18 +38,33 @@ function bookingFields(bookedMonth: LineEntryPatch["bookedMonth"], existing?: Pi
   return { bookedMonth, monthYear: bookedMonth };
 }
 
-export function buildLineEntryPatchRecord(patch: LineEntryPatch, existing?: Pick<LineEntryEntity, "date">): Record<string, unknown> {
-  const { bookedMonth, business, ...rest } = patch;
+/**
+ * A personal transaction is paid from a category or a goal, so filing it under one clears the other.
+ * A business transaction keeps both: the label says what it was, the goal which allocation paid for it.
+ */
+export function buildLineEntryPatchRecord(
+  patch: LineEntryPatch,
+  existing?: Pick<LineEntryEntity, "date" | "label" | "goalId">,
+  { combined = false }: { combined?: boolean } = {},
+): Record<string, unknown> {
+  const { bookedMonth, business, goalId, ...rest } = patch;
   const excluding = patch.osStatus === LineEntryStatus.EXCLUDED;
-  const filing = patch.label !== undefined || patch.goalId !== undefined || excluding;
-  const osStatus = filing && patch.osStatus === undefined ? osStatusOf(patch.label, patch.goalId) : patch.osStatus;
+  const labelling = patch.label !== undefined;
+  const filing = labelling || goalId !== undefined || excluding;
+  const label = combined && !labelling ? existing?.label : patch.label;
+  const goal = goalId === null ? undefined : combined && goalId === undefined ? existing?.goalId : goalId;
+  const osStatus = filing && patch.osStatus === undefined ? osStatusOf(label, goal) : patch.osStatus;
+  const clearsLabel = excluding || (!combined && Boolean(goalId));
+  const clearsGoal = excluding || goalId === null || (!combined && Boolean(patch.label));
   return {
     ...rest,
+    ...(goalId ? { goalId } : {}),
     ...bookingFields(bookedMonth, existing),
     ...(business === undefined ? {} : business ? { business: true, goalId: FieldValue.delete() } : { business: FieldValue.delete() }),
-    ...(patch.goalId || excluding ? { label: FieldValue.delete() } : {}),
-    ...(patch.label || excluding ? { goalId: FieldValue.delete() } : {}),
-    ...(filing ? { labelSource: LabelSource.MANUAL, ruleId: FieldValue.delete() } : {}),
+    ...(clearsLabel ? { label: FieldValue.delete() } : {}),
+    ...(clearsGoal ? { goalId: FieldValue.delete() } : {}),
+    // Moving a business transaction between allocations doesn't make its label a hand label
+    ...((combined ? labelling || excluding : filing) ? { labelSource: LabelSource.MANUAL, ruleId: FieldValue.delete() } : {}),
     ...(patch.tags ? { tagSource: LabelSource.MANUAL } : {}),
     ...(patch.tags?.length === 0 ? { tags: FieldValue.delete() } : {}),
     ...(osStatus ? { osStatus } : {}),
@@ -56,9 +73,16 @@ export function buildLineEntryPatchRecord(patch: LineEntryPatch, existing?: Pick
 }
 
 async function buildGoalAwarePatchRecord(existing: LineEntryEntity, patch: LineEntryPatch): Promise<Record<string, unknown>> {
+  const combined = isBusinessBook(currentBookId());
+  if (!combined && patch.label && patch.goalId) {
+    throw new ServiceValidationError("A transaction is paid from a category or a goal, not both.", {
+      formErrors: ["A transaction is paid from a category or a goal, not both."],
+      fieldErrors: {},
+    });
+  }
   if (patch.goalId) await activeGoal(patch.goalId);
   await assertKnownTags(patch.tags);
-  return buildLineEntryPatchRecord(patch, existing);
+  return buildLineEntryPatchRecord(patch, existing, { combined });
 }
 
 function changedMonths({ before, after }: WriteChange): MonthYear[] {

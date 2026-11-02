@@ -7,6 +7,7 @@ const lineEntryQuery = defineListQuery([
   { key: "monthYear", type: "stringFilter" },
   { key: "date", type: "stringFilter" },
   { key: "label", type: "stringFilter" },
+  { key: "goalId", type: "stringFilter" },
   { key: "plaidStatus", type: "stringFilter" },
   { key: "osStatus", type: "stringFilter" },
   { key: "labelSource", type: "stringFilter" },

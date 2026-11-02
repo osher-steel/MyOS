@@ -62,13 +62,28 @@ test("only DIBS is a business book", () => {
   assert.equal(isBusinessBook("personal"), false);
 });
 
-test("pool spending stays out of monthly burn and is totalled per pool", () => {
+test("allocation spending stays out of monthly burn and keeps its labels", () => {
   const burn = monthBurn(
-    [entry(100, "Ads"), entry(300, undefined, { goalId: "growth" }), entry(200, undefined, { goalId: "growth" })],
+    [
+      entry(100, "Ads"),
+      entry(300, "Flyer distribution", { goalId: "venue" }),
+      entry(200, "Flyer distribution", { goalId: "venue", id: "second" }),
+      entry(50, undefined, { goalId: "venue" }),
+    ],
     "2026-10",
   );
   assert.equal(burn.grossBurn, 100);
-  assert.deepEqual(burn.pools, [{ name: "growth", amount: 500, count: 2 }]);
+  assert.deepEqual(burn.pools, [
+    {
+      goalId: "venue",
+      amount: 550,
+      count: 3,
+      lines: [
+        { name: "Flyer distribution", amount: 500, count: 2 },
+        { name: "Uncategorized", amount: 50, count: 1 },
+      ],
+    },
+  ]);
   assert.equal(burn.unclassified.length, 0);
 });
 

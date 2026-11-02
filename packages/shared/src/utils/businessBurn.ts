@@ -25,6 +25,9 @@ export const businessFlowOf = (label: string): BusinessFlow => FLOW_BY_NAME.get(
 
 export type BurnLine = { name: string; amount: number; count: number };
 
+/** What one allocation paid for in a month, by the label each transaction carries. */
+export type PoolSpend = { goalId: string; amount: number; count: number; lines: BurnLine[] };
+
 export type MonthBurn = {
   monthYear: string;
   grossBurn: number; // cents, refunds netted against their category
@@ -34,7 +37,7 @@ export type MonthBurn = {
   internal: number;
   expenses: BurnLine[]; // largest first
   revenues: BurnLine[]; // largest first
-  pools: BurnLine[]; // paid from an allocated pool (a goal), keyed by goal id; not part of monthly burn
+  pools: PoolSpend[]; // paid from an allocation (a goal) instead of the monthly budget; largest first
   unclassified: LineEntryView[]; // no business category or pool yet, so in none of the figures above
 };
 
@@ -42,7 +45,7 @@ export type MonthBurn = {
 export function monthBurn(entries: LineEntryView[], monthYear: string): MonthBurn {
   const lines = new Map<string, BurnLine>();
   const unclassified: LineEntryView[] = [];
-  const pools = new Map<string, BurnLine>();
+  const pools = new Map<string, PoolSpend>();
   let financing = 0;
   let internal = 0;
 
@@ -50,11 +53,11 @@ export function monthBurn(entries: LineEntryView[], monthYear: string): MonthBur
     if (entry.monthYear !== monthYear || entry.plaidStatus === PlaidTransactionStatus.REMOVED) continue;
     if (entry.osStatus === LineEntryStatus.EXCLUDED) continue;
     if (entry.goalId) {
-      const pool = pools.get(entry.goalId) ?? {
-        name: entry.goalId,
-        amount: 0,
-        count: 0,
-      };
+      const pool = pools.get(entry.goalId) ?? { goalId: entry.goalId, amount: 0, count: 0, lines: [] };
+      const name = entry.label ?? "Uncategorized";
+      const line = pool.lines.find((row) => row.name === name) ?? pool.lines[pool.lines.push({ name, amount: 0, count: 0 }) - 1]!;
+      line.amount += entry.amount;
+      line.count += 1;
       pool.amount += entry.amount;
       pool.count += 1;
       pools.set(entry.goalId, pool);
@@ -96,7 +99,9 @@ export function monthBurn(entries: LineEntryView[], monthYear: string): MonthBur
     internal,
     expenses,
     revenues,
-    pools: [...pools.values()].sort((a, b) => b.amount - a.amount),
+    pools: [...pools.values()]
+      .map((pool) => ({ ...pool, lines: pool.lines.sort((a, b) => b.amount - a.amount) }))
+      .sort((a, b) => b.amount - a.amount),
     unclassified,
   };
 }

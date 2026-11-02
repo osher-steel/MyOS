@@ -1,10 +1,11 @@
 "use client";
 
-import { convertToDate, GoalAllocationReason, GoalStatus, type Goal, type GoalAllocation } from "@myos/shared";
+import { convertToDate, GoalAllocationReason, GoalStatus, type Goal, type GoalAllocation, type LineEntryView } from "@myos/shared";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Section } from "@/components/editorial";
 import { money } from "@/lib/format";
 import { assignToGoal, createGoal, fetchAllocations, fetchGoals, undoAllocation } from "@/lib/goalsClient";
+import { unwrap } from "@/lib/proxyClient";
 import { centsFrom, message, Stat } from "./common";
 
 const REASONS: Record<GoalAllocationReason, string> = {
@@ -27,11 +28,47 @@ function summarize(goal: Goal, allocations: GoalAllocation[]): PoolSummary {
   return { goal, funded, spent, log };
 }
 
-function Pool({ pool, onChanged, onError }: { pool: PoolSummary; onChanged: () => void; onError: (error: string) => void }) {
+// Money in and out of an allocation, newest first: top-ups by when they were logged, transactions by their date
+type LogItem = { kind: "allocation"; at: Date; allocation: GoalAllocation } | { kind: "transaction"; at: Date; entry: LineEntryView };
+
+function Pool({
+  pool,
+  version,
+  onChanged,
+  onError,
+}: {
+  pool: PoolSummary;
+  version: number;
+  onChanged: () => void;
+  onError: (error: string) => void;
+}) {
+  const [transactions, setTransactions] = useState<LineEntryView[] | null>(null);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const { goal, funded, spent, log } = pool;
+
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/transactions?goalId=${encodeURIComponent(goal.id)}`)
+      .then((res) => unwrap<LineEntryView[]>(res))
+      .then((loaded) => live && setTransactions(loaded))
+      .catch((cause: unknown) => live && onError(message(cause)));
+    return () => {
+      live = false;
+    };
+  }, [goal.id, version, onError]);
+
+  const history = useMemo<LogItem[]>(
+    () =>
+      [
+        ...log
+          .filter((allocation) => allocation.reason !== GoalAllocationReason.GOAL_SPEND)
+          .map((allocation) => ({ kind: "allocation" as const, at: when(allocation), allocation })),
+        ...(transactions ?? []).map((entry) => ({ kind: "transaction" as const, at: new Date(`${entry.date}T12:00:00`), entry })),
+      ].sort((a, b) => b.at.getTime() - a.at.getTime()),
+    [log, transactions],
+  );
   const used = funded > 0 ? Math.min(100, Math.max(0, (spent / funded) * 100)) : 0;
 
   async function run(work: () => Promise<unknown>) {
@@ -96,32 +133,59 @@ function Pool({ pool, onChanged, onError }: { pool: PoolSummary; onChanged: () =
         </button>
       </form>
 
-      <details className="pt-4" open={log.length <= 6}>
-        <summary className="entry-meta cursor-pointer">History · {log.length}</summary>
+      <details className="pt-4" open={history.length <= 8}>
+        <summary className="entry-meta cursor-pointer">
+          History ·{" "}
+          {transactions === null ? "loading…" : `${transactions.length} transactions, ${history.length - transactions.length} top-ups`}
+        </summary>
         <ul className="pt-2">
-          {log.map((allocation) => (
-            <li key={allocation.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-rule py-2">
-              <span className="min-w-0 flex-1">
-                {REASONS[allocation.reason]}
-                {allocation.note ? <span className="entry-meta"> · {allocation.note}</span> : null}
-                <span className="entry-meta"> · {stamp(when(allocation))}</span>
-              </span>
-              <span className={`figure ${allocation.amount < 0 ? "" : "text-ink"}`}>
-                {allocation.amount > 0 ? "+" : "−"}
-                {money(Math.abs(allocation.amount), { cents: true })}
-              </span>
-              {allocation.reason === GoalAllocationReason.ASSIGNMENT ? (
-                <button
-                  type="button"
-                  className="entry-meta hover:text-accent disabled:opacity-40"
-                  disabled={busy}
-                  onClick={() => void run(() => undoAllocation(allocation.id))}
-                >
-                  undo
-                </button>
-              ) : null}
-            </li>
-          ))}
+          {history.map((item) =>
+            item.kind === "transaction" ? (
+              <li
+                key={`t-${item.entry.id}`}
+                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-rule py-2"
+              >
+                <span className="min-w-0 flex-1">
+                  {item.entry.name}
+                  <span className="entry-meta">
+                    {" "}
+                    · {item.entry.label ?? "uncategorized"} · {item.entry.date}
+                  </span>
+                </span>
+                <span className="figure">
+                  {item.entry.amount > 0 ? "−" : "+"}
+                  {money(Math.abs(item.entry.amount), { cents: true })}
+                </span>
+              </li>
+            ) : (
+              <li
+                key={item.allocation.id}
+                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-rule py-2"
+              >
+                <span className="min-w-0 flex-1">
+                  {item.allocation.amount < 0 && item.allocation.reason === GoalAllocationReason.ASSIGNMENT
+                    ? "Reduced"
+                    : REASONS[item.allocation.reason]}
+                  {item.allocation.note ? <span className="entry-meta"> · {item.allocation.note}</span> : null}
+                  <span className="entry-meta"> · {stamp(item.at)}</span>
+                </span>
+                <span className="figure text-ink">
+                  {item.allocation.amount > 0 ? "+" : "−"}
+                  {money(Math.abs(item.allocation.amount), { cents: true })}
+                </span>
+                {item.allocation.reason === GoalAllocationReason.ASSIGNMENT ? (
+                  <button
+                    type="button"
+                    className="entry-meta hover:text-accent disabled:opacity-40"
+                    disabled={busy}
+                    onClick={() => void run(() => undoAllocation(item.allocation.id))}
+                  >
+                    undo
+                  </button>
+                ) : null}
+              </li>
+            ),
+          )}
         </ul>
       </details>
     </Section>
@@ -136,6 +200,7 @@ export default function Allocations() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [version, setVersion] = useState(0);
   const load = useCallback(() => {
     Promise.all([fetchGoals(), fetchAllocations()])
       .then(([loadedGoals, loadedAllocations]) => {
@@ -145,6 +210,10 @@ export default function Allocations() {
       .catch((cause: unknown) => setError(message(cause)));
   }, []);
   useEffect(load, [load]);
+  const reload = useCallback(() => {
+    setVersion((v) => v + 1);
+    load();
+  }, [load]);
 
   const pools = useMemo(
     () => (goals ?? []).filter((goal) => goal.status === GoalStatus.ACTIVE).map((goal) => summarize(goal, allocations)),
@@ -194,7 +263,7 @@ export default function Allocations() {
 
           <div className="grid gap-12 md:grid-cols-2">
             {pools.map((pool) => (
-              <Pool key={pool.goal.id} pool={pool} onChanged={load} onError={setError} />
+              <Pool key={pool.goal.id} pool={pool} version={version} onChanged={reload} onError={setError} />
             ))}
             <Section label="New allocation">
               <form
