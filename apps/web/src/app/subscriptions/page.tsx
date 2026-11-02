@@ -1,9 +1,13 @@
+import { isBusinessBook } from "@myos/shared";
+import { redirect } from "next/navigation";
+import { currentBook } from "@/lib/api";
 import { Masthead } from "@/components/masthead";
 import SubscriptionsView from "@/finance/SubscriptionsView";
 
 export const dynamic = "force-dynamic";
 
-export default function Subscriptions() {
+export default async function Subscriptions() {
+  if (isBusinessBook(await currentBook())) redirect("/");
   return (
     <main className="mx-auto max-w-6xl px-6 py-12 md:py-16">
       <Masthead title="Subscriptions" current="subscriptions" />

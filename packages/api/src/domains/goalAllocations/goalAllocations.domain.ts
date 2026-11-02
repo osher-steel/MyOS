@@ -2,6 +2,7 @@ import {
   assignmentErrors,
   GOAL_ALLOCATIONS_COLLECTION,
   GoalAllocationReason,
+  isBusinessBook,
   monthReportId,
   toMonthYear,
 } from "@myos/shared";
@@ -42,6 +43,11 @@ async function monthRemaining(monthYear: string): Promise<number> {
   return report.savingsResult - (await assignedIn(monthYear));
 }
 
+// A business book's pools are budgets you size by hand, not money set aside from personal savings
+async function unassignedFor(): Promise<number> {
+  return isBusinessBook(currentBookId()) ? Number.POSITIVE_INFINITY : (await loadSavingsSummary()).unassigned;
+}
+
 export async function buildAssignmentRecord(input: GoalAllocationPost): Promise<GoalAllocationRecord> {
   const goal = await activeGoal(input.goalId);
   const errors = assignmentErrors({
@@ -49,7 +55,7 @@ export async function buildAssignmentRecord(input: GoalAllocationPost): Promise<
     goalName: goal.name,
     goalBalance: goal.amountSaved,
     monthRemaining: input.monthYear ? await monthRemaining(input.monthYear) : undefined,
-    unassigned: input.monthYear ? 0 : (await loadSavingsSummary()).unassigned,
+    unassigned: input.monthYear ? 0 : await unassignedFor(),
   });
   if (errors.length > 0) throw goalRulesError(errors);
   return { ...input, reason: GoalAllocationReason.ASSIGNMENT, createdAt: new Date() };

@@ -39,8 +39,8 @@ function errorMessage(err: unknown): string {
   return (err as Error).message;
 }
 
-function labelOptions(budget: Budget | null | undefined, extra?: string): string[] {
-  const names = budget ? budgetCategories(budget).flatMap(({ names }) => names) : [];
+function labelOptions(budget: Budget | null | undefined, extra?: string, others: readonly string[] = []): string[] {
+  const names = [...new Set([...(budget ? budgetCategories(budget).flatMap(({ names }) => names) : []), ...others])];
   return extra && !names.includes(extra) ? [extra, ...names] : names;
 }
 
@@ -50,10 +50,12 @@ const byRelevance = (a: LabelRule, b: LabelRule) =>
 function RuleRow({
   rule,
   budget,
+  others,
   onChange,
   onRemove,
 }: {
   rule: LabelRule;
+  others?: readonly string[];
   budget: Budget | null | undefined;
   onChange: (patch: Partial<Pick<LabelRule, "label" | "enabled">>) => void;
   onRemove: () => void;
@@ -80,7 +82,7 @@ function RuleRow({
             onChange={(event) => onChange({ label: event.target.value })}
             className={`${control} appearance-none field-sizing-content text-right`}
           >
-            {labelOptions(budget, rule.label).map((name) => (
+            {labelOptions(budget, rule.label, others).map((name) => (
               <option key={name} value={name}>
                 {name}
               </option>
@@ -113,8 +115,16 @@ function RuleRow({
   );
 }
 
-function NewRule({ budget, onCreate }: { budget: Budget | null | undefined; onCreate: (draft: RuleDraft) => Promise<string | null> }) {
-  const labels = labelOptions(budget);
+function NewRule({
+  budget,
+  others,
+  onCreate,
+}: {
+  budget: Budget | null | undefined;
+  others?: readonly string[];
+  onCreate: (draft: RuleDraft) => Promise<string | null>;
+}) {
+  const labels = labelOptions(budget, undefined, others);
   const [draft, setDraft] = useState<RuleDraft>({ field: LabelRuleField.MERCHANT_NAME, match: LabelRuleMatch.EXACT, value: "", label: "" });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -256,7 +266,8 @@ function RunRules({ onApplied }: { onApplied: () => void }) {
   );
 }
 
-export default function RulesSettings() {
+/** `extraLabels` are offered beside the current budget's lines, e.g. a business book's revenue and transfer labels. */
+export default function RulesSettings({ extraLabels }: { extraLabels?: readonly string[] } = {}) {
   const [rules, setRules] = useState<LabelRule[] | null>(null);
   const [budget, setBudget] = useState<Budget | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -337,6 +348,7 @@ export default function RulesSettings() {
                 key={rule.id}
                 rule={rule}
                 budget={budget}
+                others={extraLabels}
                 onChange={(patch) => void change(rule, patch)}
                 onRemove={() => void remove(rule)}
               />
@@ -345,7 +357,7 @@ export default function RulesSettings() {
         </Section>
 
         <div className="flex flex-col gap-12">
-          <NewRule budget={budget} onCreate={create} />
+          <NewRule budget={budget} others={extraLabels} onCreate={create} />
           <RunRules onApplied={() => setVersion((v) => v + 1)} />
         </div>
       </div>

@@ -4,8 +4,11 @@ import {
   budgetUsage,
   groupLineEntries,
   monthReport,
+  osStatusOf,
   toMonthYear,
   totalLineEntries,
+  LabelSource,
+  type LineEntry,
   type LineEntryView,
   type MonthReport,
   type MonthYear,
@@ -14,7 +17,7 @@ import {
   type Goal,
   type SavingsSummary,
 } from "@myos/shared";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchBudget } from "@/lib/budgetsClient";
 import { fetchGoals, fetchSavings } from "@/lib/goalsClient";
 import { fetchPastReports, regenerateReport } from "@/lib/reportsClient";
@@ -152,17 +155,41 @@ export default function useFinance({ historyMonths = 6, initialMonth }: { histor
   }, [budget.data, totals, report.entry, isOpen]);
 
   const updateStored = stored.update;
+  // The latest edit per entry: a slower, older save must not overwrite a newer one
+  const pending = useRef(new Map<string, number>());
   const saveEntry = useCallback(
     async (entry: LineEntryView, patch: LineEntryEdit) => {
       setSaveError(null);
+      const seq = (pending.current.get(entry.id) ?? 0) + 1;
+      pending.current.set(entry.id, seq);
+      const latest = () => pending.current.get(entry.id) === seq;
+      // Moving a transaction to another month waits for the server; everything else shows at once
+      const optimistic = patch.bookedMonth === undefined;
+      let before: LineEntry | undefined;
+      if (optimistic) {
+        updateStored((rows) =>
+          rows.map((row) => {
+            if (row.id !== entry.id) return row;
+            before = row;
+            const next: LineEntry = { ...row, ...patch } as LineEntry;
+            return patch.label !== undefined ? { ...next, osStatus: osStatusOf(patch.label), labelSource: LabelSource.MANUAL, ruleId: undefined } : next;
+          }),
+        );
+      }
       try {
         const saved = await patchLineEntry(entry, patch);
+        if (!latest()) return;
         updateStored((rows) => [
           ...rows.filter((row) => row.id !== saved.id),
           ...(saved.monthYear === entry.monthYear ? [saved] : []),
         ]);
       } catch (err) {
-        setSaveError((err as Error).message);
+        if (!latest()) return;
+        if (optimistic && before) {
+          const original = before;
+          updateStored((rows) => rows.map((row) => (row.id === original.id ? original : row)));
+        }
+        setSaveError(`Couldn't save ${entry.name}: ${(err as Error).message}`);
       }
     },
     [updateStored],

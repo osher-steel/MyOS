@@ -1,12 +1,14 @@
-import { isMonthYear } from "@myos/shared";
-import { notFound } from "next/navigation";
+import { isBusinessBook, isMonthYear } from "@myos/shared";
+import { notFound, redirect } from "next/navigation";
 import { Masthead } from "@/components/masthead";
+import { currentBook } from "@/lib/api";
 import BudgetEditor from "@/finance/BudgetEditor";
 
 export const dynamic = "force-dynamic";
 
 /** The month is the URL; everything else is client state in BudgetEditor. */
 export default async function EditBudget({ params }: PageProps<"/budget/[monthYear]">) {
+  if (isBusinessBook(await currentBook())) redirect("/");
   const { monthYear } = await params;
   if (!isMonthYear(monthYear)) notFound();
 

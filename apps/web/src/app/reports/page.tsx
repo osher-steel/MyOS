@@ -1,10 +1,13 @@
-import { isMonthYear, nextMonthYear, toMonthYear } from "@myos/shared";
+import { isBusinessBook, isMonthYear, nextMonthYear, toMonthYear } from "@myos/shared";
+import { redirect } from "next/navigation";
 import { Masthead } from "@/components/masthead";
+import { currentBook } from "@/lib/api";
 import ReportsView from "@/finance/ReportsView";
 
 export const dynamic = "force-dynamic";
 
 export default async function Reports({ searchParams }: PageProps<"/reports">) {
+  if (isBusinessBook(await currentBook())) redirect("/");
   const { month } = await searchParams;
   const initialMonth = typeof month === "string" && isMonthYear(month) && month <= nextMonthYear(toMonthYear()) ? month : undefined;
 
