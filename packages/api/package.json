@@ -20,6 +20,8 @@
     "backup": "node --env-file=../../.env --import tsx scripts/backup.ts",
     "restore": "node --env-file=../../.env --import tsx scripts/restore.ts",
     "savings:start": "node --env-file=../../.env --import tsx scripts/start-savings.ts",
+    "cli": "node --env-file=../../.env --import tsx scripts/cli.ts",
+    "plaid:link": "node --env-file=../../.env --import tsx scripts/plaid-link.ts",
     "deploy:functions": "node scripts/deploy-functions.mjs"
   },
   "dependencies": {
